@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>U-Tube Vibration Simulator</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --bg-color: #0d1117;
+      --panel-bg: #161b22;
+      --text-color: #c9d1d9;
+      --accent: #58a6ff;
+      --tube-color: rgba(255, 255, 255, 0.2);
+      --liquid-1: #00f2fe;
+      --liquid-2: #ff0844;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    header {
+      padding: 20px;
+      text-align: center;
+      width: 100%;
+      border-bottom: 1px solid var(--panel-bg);
+      background: rgba(13, 17, 23, 0.9);
+      backdrop-filter: blur(10px);
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.8rem;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 30px;
+      gap: 30px;
+      padding: 0 20px;
+      max-width: 1200px;
+      width: 100%;
+    }
+    .canvas-container {
+      position: relative;
+      background: var(--panel-bg);
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    canvas {
+      display: block;
+    }
+    .controls {
+      background: var(--panel-bg);
+      padding: 24px;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 800px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.05);
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    label {
+      font-size: 0.9rem;
+      font-weight: 500;
+      display: flex;
+      justify-content: space-between;
+    }
+    .value-display {
+      color: var(--accent);
+      font-weight: bold;
+    }
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      background: transparent;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 16px;
+      width: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      margin-top: -6px;
+      box-shadow: 0 0 10px rgba(88, 166, 255, 0.5);
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 4px;
+      cursor: pointer;
+      background: rgba(255,255,255,0.1);
+      border-radius: 2px;
+    }
+    .info {
+      font-size: 0.85rem;
+      color: #8b949e;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const App = () => {
+      const [frequency, setFrequency] = useState(1.0); // Hz
+      const [amplitude, setAmplitude] = useState(40); // px
+      const canvasRef = useRef(null);
+
+      // Simulation constants
+      const fn = 1.0; // Natural frequency (Hz)
+      const wn = 2 * Math.PI * fn;
+      const zeta = 0.15; // Damping ratio
+
+      useEffect(() => {
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        let animationFrameId;
+        const startTime = performance.now();
+
+        const drawTube = (xOffset, label, liquidColor, yLevel) => {
+          const width = 100;
+          const height = 250;
+          const thickness = 20;
+          const bottomY = 320;
+          const topY = bottomY - height;
+          const centerX = xOffset;
+          
+          ctx.save();
+          // Draw Glass Tube
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.lineWidth = 4;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          
+          ctx.beginPath();
+          // Left arm
+          ctx.moveTo(centerX - width/2, topY);
+          ctx.lineTo(centerX - width/2, bottomY);
+          // Bottom curve
+          ctx.arc(centerX, bottomY, width/2, Math.PI, 0, true);
+          // Right arm
+          ctx.lineTo(centerX + width/2, topY);
+          ctx.stroke();
+
+          // Draw Liquid
+          // Liquid rests at baseline
+          const baseline = topY + height * 0.5; 
+          
+          // In a U-tube, if one side goes up by yLevel, the other goes down by yLevel
+          const leftLevel = baseline - yLevel;
+          const rightLevel = baseline + yLevel;
+
+          const gradient = ctx.createLinearGradient(0, topY, 0, bottomY + width/2);
+          gradient.addColorStop(0, liquidColor);
+          gradient.addColorStop(1, '#000000'); // dark at bottom
+          
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.moveTo(centerX - width/2 + 2, leftLevel);
+          ctx.lineTo(centerX - width/2 + 2, bottomY);
+          ctx.arc(centerX, bottomY, width/2 - 2, Math.PI, 0, true);
+          ctx.lineTo(centerX + width/2 - 2, rightLevel);
+          ctx.lineTo(centerX + width/2 - 2, bottomY);
+          // Close the shape by drawing back
+          ctx.arc(centerX, bottomY, width/2 - 2, 0, Math.PI, false);
+          ctx.fill();
+          
+          // Liquid surface highlights
+          ctx.fillStyle = 'rgba(255,255,255,0.8)';
+          ctx.beginPath();
+          ctx.ellipse(centerX - width/2 + 2, leftLevel, thickness/2 - 2, 3, 0, 0, Math.PI*2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(centerX + width/2 - 2, rightLevel, thickness/2 - 2, 3, 0, 0, Math.PI*2);
+          ctx.fill();
+
+          // Label
+          ctx.fillStyle = '#c9d1d9';
+          ctx.font = '16px Segoe UI';
+          ctx.textAlign = 'center';
+          ctx.fillText(label, centerX, bottomY + 80);
+          
+          ctx.restore();
+        };
+
+        const render = (time) => {
+          const t = (time - startTime) / 1000; // seconds
+
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Draw Grid
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+          ctx.lineWidth = 1;
+          for(let i=0; i<canvas.width; i+=40) {
+            ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+          }
+          for(let i=0; i<canvas.height; i+=40) {
+            ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
+          }
+
+          // Input physics
+          const w = 2 * Math.PI * frequency;
+          const y1 = amplitude * Math.sin(w * t);
+
+          // Response physics (Steady state 2nd order system response)
+          const r = frequency / fn; // Frequency ratio
+          const M = 1 / Math.sqrt(Math.pow(1 - r*r, 2) + Math.pow(2 * zeta * r, 2)); // Magnification factor
+          let phase = Math.atan2(2 * zeta * r, 1 - r*r); // Phase lag
+          const y2 = M * amplitude * Math.sin(w * t - phase);
+
+          drawTube(200, "Forced Vibration (Input)", "rgba(0, 242, 254, 0.8)", y1);
+          drawTube(600, "Responding Vibration (Output)", "rgba(255, 8, 68, 0.8)", y2);
+
+          // Draw real-time data
+          ctx.fillStyle = '#c9d1d9';
+          ctx.font = '14px Consolas';
+          ctx.textAlign = 'left';
+          ctx.fillText(`Input Amp: ${amplitude.toFixed(1)} px`, 30, 40);
+          ctx.fillText(`Output Amp: ${(M * amplitude).toFixed(1)} px`, 430, 40);
+          ctx.fillText(`Freq Ratio (f/fn): ${r.toFixed(2)}`, 30, 65);
+          ctx.fillText(`Magnification (M): ${M.toFixed(2)}`, 430, 65);
+          ctx.fillText(`Phase Lag: ${(phase * 180 / Math.PI).toFixed(1)}°`, 430, 90);
+          
+          // Crosshairs for resonance indication
+          if (r > 0.95 && r < 1.05) {
+             ctx.fillStyle = '#ffcc00';
+             ctx.fillText(`🔥 RESONANCE WARNING 🔥`, 430, 115);
+          }
+
+          animationFrameId = requestAnimationFrame(render);
+        };
+
+        animationFrameId = requestAnimationFrame(render);
+
+        return () => {
+          cancelAnimationFrame(animationFrameId);
+        };
+      }, [frequency, amplitude]);
+
+      return (
+        <React.Fragment>
+          <header>
+            <h1>U-Tube Vibration Simulator</h1>
+          </header>
+          
+          <div className="container">
+            <div className="canvas-container">
+              <canvas 
+                ref={canvasRef} 
+                width={800} 
+                height={450}
+              />
+            </div>
+            
+            <div className="controls">
+              <div className="control-group">
+                <label>
+                  <span>Excitation Frequency ($f$)</span>
+                  <span className="value-display">{frequency.toFixed(2)} Hz</span>
+                </label>
+                <input 
+                  type="range" 
+                  min="0.1" 
+                  max="3.0" 
+                  step="0.05" 
+                  value={frequency} 
+                  onChange={(e) => setFrequency(parseFloat(e.target.value))} 
+                />
+                <div className="info">Natural Frequency ($f_n$): 1.00 Hz</div>
+              </div>
+
+              <div className="control-group">
+                <label>
+                  <span>Input Amplitude ($A$)</span>
+                  <span className="value-display">{amplitude.toFixed(0)} px</span>
+                </label>
+                <input 
+                  type="range" 
+                  min="10" 
+                  max="80" 
+                  step="1" 
+                  value={amplitude} 
+                  onChange={(e) => setAmplitude(parseFloat(e.target.value))} 
+                />
+              </div>
+            </div>
+          </div>
+        </React.Fragment>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
