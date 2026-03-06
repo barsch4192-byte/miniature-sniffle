@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPA & Graduation Requirements Tracker</title>
+
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5', // Indigo-600
+                        secondary: '#10B981', // Emerald-500
+                        dark: '#0F172A', // Slate-900
+                        surface: '#1E293B', // Slate-800
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0F172A;
+            /* dark */
+            color: #F8FAFC;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1E293B;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748B;
+        }
+
+        select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 1rem center;
+            background-size: 1em;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen p-6 md:p-10">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect, useRef } = React;
+
+        // Icons
+        const CalculatorIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="8" y1="6" x2="16" y2="6"></line><line x1="16" y1="14" x2="16" y2="18"></line><line x1="16" y1="10" x2="16" y2="10.01"></line><line x1="12" y1="10" x2="12" y2="10.01"></line><line x1="8" y1="10" x2="8" y2="10.01"></line><line x1="8" y1="14" x2="8" y2="14.01"></line><line x1="12" y1="14" x2="12" y2="14.01"></line><line x1="8" y1="18" x2="8" y2="18.01"></line><line x1="12" y1="18" x2="12" y2="18.01"></line></svg>;
+        const CheckIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>;
+        const AlertTriIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>;
+        const AlertIcon = AlertTriIcon;
+
+        // Constants Data
+        const GRADE_POINTS = { 'AA': 4.0, 'A': 3.0, 'B': 2.0, 'C': 1.0, 'D': 0.0, 'E': 0.0 };
+        const COLORS = ['#10B981', '#3B82F6', '#8B5CF6', '#F59E0B', '#EF4444', '#6B7280'];
+
+        const COURSES = ["機械システム", "航空宇宙", "ロボティクス", "ファインメカニクス", "量子サイエンス"];
+
+        const CATEGORIES = [
+            "全学_必修", "全学_選択1", "全学_選択2", "全学_選択3", "全学_選択4", "全学_外国語",
+            "専門_工学共通", "専門_学科必修", "専門_選択必修1", "専門_選択必修2", "専門_選択必修3", "専門_その他",
+            "不明"
+        ];
+
+        const SUBJECT_MASTER = {
+            // ==========================================
+            // 全学教育科目
+            // ==========================================
+
+            // 【全学_必修】（指定された必修科目・融合型理系実験・情報・学術基礎の必修分）
+            "学問論": { category: "全学_必修" },
+            "自然科学総合実験": { category: "全学_必修" },
+            "情報とデータの基礎": { category: "全学_必修" },
+            "線形代数学A": { category: "全学_必修" },
+            "解析学A": { category: "全学_必修" },
+            "解析学B": { category: "全学_必修" },
+            "常微分方程式論": { category: "全学_必修" },
+            "物理学A": { category: "全学_必修" },
+            "物理学B": { category: "全学_必修" },
+            "化学B": { category: "全学_必修" },
+
+            // 【全学_外国語】（英語および基礎初修語）
+            "英語Ⅰ-A": { category: "全学_外国語" },
+            "英語Ⅰ-B": { category: "全学_外国語" },
+            "英語Ⅱ-A": { category: "全学_外国語" },
+            "英語Ⅱ-B": { category: "全学_外国語" },
+            "英語Ⅲ": { category: "全学_外国語" },
+            "英語Ⅲ(e-learning)": { category: "全学_外国語" },
+            "基礎ドイツ語Ⅰ": { category: "全学_外国語" },
+            "基礎ドイツ語Ⅱ": { category: "全学_外国語" },
+            "基礎フランス語Ⅰ": { category: "全学_外国語" },
+            "基礎フランス語Ⅱ": { category: "全学_外国語" },
+            "基礎ロシア語Ⅰ": { category: "全学_外国語" },
+            "基礎ロシア語Ⅱ": { category: "全学_外国語" },
+            "基礎スペイン語Ⅰ": { category: "全学_外国語" },
+            "基礎スペイン語Ⅱ": { category: "全学_外国語" },
+            "基礎中国語Ⅰ": { category: "全学_外国語" },
+            "基礎中国語Ⅱ": { category: "全学_外国語" },
+            "基礎朝鮮語Ⅰ": { category: "全学_外国語" },
+            "基礎朝鮮語Ⅱ": { category: "全学_外国語" },
+
+            // 【全学_選択1】（学問論演習・保健体育）
+            "学問論演習": { category: "全学_選択1" },
+            "スポーツA": { category: "全学_選択1" },
+            "体と健康": { category: "全学_選択1" },
+            "身体の文化と科学": { category: "全学_選択1" },
+
+            // 【全学_選択2】（展開学問論・現代教養科目・先端学術科目）
+            "展開学問論": { category: "全学_選択2" },
+            "データ科学・AI概論": { category: "全学_選択2" },
+            "機械学習アルゴリズム概論": { category: "全学_選択2" },
+            "実践的機械学習Ⅰ": { category: "全学_選択2" },
+            "実践的機械学習Ⅱ": { category: "全学_選択2" },
+            "情報教育特別講義(AIをめぐる人間と社会の過去・現在・未来)": { category: "全学_選択2" },
+            "情報教育特別講義(AI・データ科学研究の現場)": { category: "全学_選択2" },
+            "国際事情": { category: "全学_選択2" },
+            "国際教養PBL": { category: "全学_選択2" },
+            "国際教養特定課題": { category: "全学_選択2" },
+            "文化理解": { category: "全学_選択2" },
+            "文化と社会の探求": { category: "全学_選択2" },
+            "多文化間コミュニケーション": { category: "全学_選択2" },
+            "多文化PBL": { category: "全学_選択2" },
+            "多文化特定課題": { category: "全学_選択2" },
+            "グローバル学習": { category: "全学_選択2" },
+            "キャリア関連学習": { category: "全学_選択2" },
+            "グローバルPBL": { category: "全学_選択2" },
+            "グローバル特定課題": { category: "全学_選択2" },
+            "海外長期研修": { category: "全学_選択2" },
+            "海外短期研修(基礎A)": { category: "全学_選択2" },
+            "海外短期研修(基礎B)": { category: "全学_選択2" },
+            "海外短期研修(展開A)": { category: "全学_選択2" },
+            "海外短期研修(展開B)": { category: "全学_選択2" },
+            "海外短期研修(発展A)": { category: "全学_選択2" },
+            "海外短期研修(発展B)": { category: "全学_選択2" },
+            "アントレプレナー入門塾": { category: "全学_選択2" },
+            "社会起業家・NPO入門ゼミ": { category: "全学_選択2" },
+            "ライフ・キャリアデザインA": { category: "全学_選択2" },
+            "ライフ・キャリアデザインB": { category: "全学_選択2" },
+            "ライフ・キャリアデザインC": { category: "全学_選択2" },
+            "ライフ・キャリアデザインD": { category: "全学_選択2" },
+            "インターンシップ事前研修": { category: "全学_選択2" },
+            "インターンシップ実習A": { category: "全学_選択2" },
+            "インターンシップ実習B": { category: "全学_選択2" },
+            "汎用的技能ワークショップ": { category: "全学_選択2" },
+            "キャリア教育特別講義(河北新報・東北を拓く新聞論)": { category: "全学_選択2" },
+            "キャリア教育特別講義(読売新聞・ジャーナリズムと社会)": { category: "全学_選択2" },
+            "キャリア教育特別講義(専門職キャリアのための口腔保健学総論)": { category: "全学_選択2" },
+            "持続可能性と社会共創": { category: "全学_選択2" },
+            "SDGsにみるグローバルガバナンスと持続可能な開発": { category: "全学_選択2" },
+            "持続可能な社会のレジリエントデザイン": { category: "全学_選択2" },
+            "持続可能な発展と社会": { category: "全学_選択2" },
+            "持続可能な社会実現に向けたシステム設計": { category: "全学_選択2" },
+            "ジェンダー共創社会": { category: "全学_選択2" },
+            "カレント・トピックス科目": { category: "全学_選択2" },
+            "フロンティア科目": { category: "全学_選択2" },
+
+            // 【全学_選択3】（人文科学・社会科学・学際科目）
+            "論理学": { category: "全学_選択3" },
+            "哲学": { category: "全学_選択3" },
+            "倫理学": { category: "全学_選択3" },
+            "文学": { category: "全学_選択3" },
+            "宗教学": { category: "全学_選択3" },
+            "芸術": { category: "全学_選択3" },
+            "教育学": { category: "全学_選択3" },
+            "歴史学": { category: "全学_選択3" },
+            "言語学・日本語科学": { category: "全学_選択3" },
+            "心理学": { category: "全学_選択3" },
+            "文化人類学": { category: "全学_選択3" },
+            "社会学": { category: "全学_選択3" },
+            "経済と社会": { category: "全学_選択3" },
+            "日本国憲法": { category: "全学_選択3" },
+            "法学": { category: "全学_選択3" },
+            "政治学": { category: "全学_選択3" },
+            "情報社会の政治・経済": { category: "全学_選択3" },
+            "法・政治と社会": { category: "全学_選択3" },
+            "インクルージョン社会": { category: "全学_選択3" },
+            "エネルギー資源と持続可能性": { category: "全学_選択3" },
+            "生命と自然": { category: "全学_選択3" },
+            "自然と環境": { category: "全学_選択3" },
+            "情報と人間・社会": { category: "全学_選択3" },
+            "東北アジア地域研究入門": { category: "全学_選択3" },
+
+            // 【全学_選択4】（学術基礎科目のうち選択のもの）
+            "線形代数学B": { category: "全学_選択4" },
+            "複素関数論": { category: "全学_選択4" },
+            "数理統計学": { category: "全学_選択4" },
+            "物理学C": { category: "全学_選択4" },
+            "基礎物理数学": { category: "全学_選択4" },
+            "化学A": { category: "全学_選択4" },
+            "化学C": { category: "全学_選択4" },
+            "生命科学A": { category: "全学_選択4" },
+            "地球システム科学": { category: "全学_選択4" },
+            "地球物質科学": { category: "全学_選択4" },
+
+
+            // ==========================================
+            // 専門教育科目
+            // ==========================================
+
+            // 【専門_工学共通】（必修の工学共通科目）
+            "数学物理学演習Ⅰ": { category: "専門_工学共通" },
+            "数学物理学演習Ⅱ": { category: "専門_工学共通" },
+            "情報処理演習": { category: "専門_工学共通" },
+
+            // 【専門_学科必修】
+            "機械工学序説": { category: "専門_学科必修" },
+
+            // 【専門_選択必修1】（3セメスター配当）
+            "数学Ⅰ": { category: "専門_選択必修1" },
+            "数学Ⅱ": { category: "専門_選択必修1" },
+            "数理解析学": { category: "専門_選択必修1" },
+            "力学": { category: "専門_選択必修1" },
+            "数理情報学演習": { category: "専門_選択必修1" },
+
+            // 【専門_選択必修2】（3セメスター配当）
+            "材料力学Ⅰ": { category: "専門_選択必修2" },
+            "流体力学Ⅰ": { category: "専門_選択必修2" },
+            "材料力学Ⅱ": { category: "専門_選択必修2" },
+
+            // 【専門_選択必修3】（4セメスター配当）
+            "量子力学": { category: "専門_選択必修3" },
+            "機械力学Ⅰ": { category: "専門_選択必修3" },
+            "熱力学Ⅰ": { category: "専門_選択必修3" },
+            "制御工学Ⅰ": { category: "専門_選択必修3" },
+            "量子力学A": { category: "専門_選択必修3" },
+            "機械力学": { category: "専門_選択必修3" },
+            "熱力学A": { category: "専門_選択必修3" },
+            "界面物理化学": { category: "専門_選択必修3" },
+            "制御工学基礎": { category: "専門_選択必修3" },
+
+            // 【専門_選択必修4】（4〜5セメスター配当）
+            "電磁気学": { category: "専門_選択必修4" },
+            "熱力学Ⅱ": { category: "専門_選択必修4" },
+            "材料科学Ⅰ": { category: "専門_選択必修4" },
+            "材料科学Ⅱ": { category: "専門_選択必修4" },
+            "電磁気学A": { category: "専門_選択必修4" },
+            "熱力学B": { category: "専門_選択必修4" },
+            "材料科学A": { category: "専門_選択必修4" },
+            "材料科学B": { category: "専門_選択必修4" },
+            "機械力学Ⅱ": { category: "専門_選択必修4" },
+
+            // 【専門_選択必修5】（5〜6セメスター配当）※システム上は「その他・選択必修」としてカウント
+            "機械創成学Ⅰ": { category: "専門_その他" },
+            "情報科学基礎Ⅰ": { category: "専門_その他" },
+            "電気電子回路Ⅰ": { category: "専門_その他" },
+            "機械創成学Ⅱ": { category: "専門_その他" },
+            "電気電子回路Ⅱ": { category: "専門_その他" },
+            "情報科学基礎Ⅱ": { category: "専門_その他" },
+            "制御工学Ⅱ": { category: "専門_その他" },
+            "流体力学Ⅱ": { category: "専門_その他" },
+            "伝熱学": { category: "専門_その他" },
+            "熱・物質輸送論": { category: "専門_その他" },
+            "弾性力学": { category: "専門_その他" },
+            "宇宙工学": { category: "専門_その他" },
+            "生命機械工学": { category: "専門_その他" },
+            "資源循環論": { category: "専門_その他" },
+            "情報科学基礎": { category: "専門_その他" },
+            "電気電子回路": { category: "専門_その他" },
+            "量子力学B": { category: "専門_その他" },
+            "電磁気学B": { category: "専門_その他" },
+            "反応速度論": { category: "専門_その他" },
+            "移動現象論": { category: "専門_その他" },
+            "放射線医用工学": { category: "専門_その他" },
+            "環境地球科学": { category: "専門_その他" },
+            "環境システム学Ⅰ": { category: "専門_その他" },
+            "材料強度学": { category: "専門_その他" },
+            "計算材料科学": { category: "専門_その他" },
+            "数値流体力学": { category: "専門_その他" },
+            "空気力学": { category: "専門_その他" },
+            "機械設計学Ⅰ": { category: "専門_その他" },
+            "機械設計学Ⅱ": { category: "専門_その他" },
+            "ロボティクスⅠ": { category: "専門_その他" },
+            "ロボティクスⅡ": { category: "専門_その他" },
+            "計測工学Ⅰ": { category: "専門_その他" },
+            "計測工学Ⅱ": { category: "専門_その他" },
+            "エネルギー変換工学": { category: "専門_その他" },
+            "航空機設計学": { category: "専門_その他" },
+            "材料の強度と破壊": { category: "専門_その他" },
+            "数理流体力学": { category: "専門_その他" },
+            "計測工学基礎": { category: "専門_その他" },
+            "核エネルギー物理学": { category: "専門_その他" },
+            "エネルギー政策論": { category: "専門_その他" },
+            "放射化学": { category: "専門_その他" },
+            "中性子輸送学": { category: "専門_その他" },
+            "計算力学": { category: "専門_その他" },
+            "環境システム学Ⅱ": { category: "専門_その他" },
+            "環境材料科学": { category: "専門_その他" },
+            "ジオメカニクス": { category: "専門_その他" },
+            "エネルギー・資源論": { category: "専門_その他" },
+
+            // 【専門_選択必修6】（7〜8セメスター配当）※システム上は「その他・選択必修」としてカウント
+            "トライボロジー": { category: "専門_その他" },
+            "電子工学概論": { category: "専門_その他" },
+            "材料理工学概論": { category: "専門_その他" },
+            "環境工学概論": { category: "専門_その他" },
+            "知的財産権入門": { category: "専門_その他" },
+            "生体医工学入門": { category: "専門_その他" },
+            "工学倫理": { category: "専門_その他" },
+            "工学英語Ⅱ": { category: "専門_その他" },
+            "燃焼工学": { category: "専門_その他" },
+            "航空宇宙機学": { category: "専門_その他" },
+            "放射線安全工学": { category: "専門_その他" },
+            "核燃料・材料学概論": { category: "専門_その他" },
+            "原子力安全規制概論": { category: "専門_その他" },
+            "貯留層工学": { category: "専門_その他" },
+            "エネルギー材料科学": { category: "専門_その他" },
+            "核環境工学": { category: "専門_その他" },
+
+            // 【専門_その他】（コースによって必修・選択が分かれる科目、研究室配属要件など）
+            "工学化学概論": { category: "専門_その他" },
+            "工学英語Ⅰ": { category: "専門_その他" },
+            "創造工学研修": { category: "専門_その他" },
+            "アカデミック・ライティング": { category: "専門_その他" },
+            "コンピュータ実習Ⅰ": { category: "専門_その他" },
+            "機械知能・航空研修Ⅰ": { category: "専門_その他" },
+            "計画及び製図Ⅰ": { category: "専門_その他" },
+            "コンピュータ実習": { category: "専門_その他" },
+            "計画及び製図": { category: "専門_その他" },
+            "機械知能・航空研修A1": { category: "専門_その他" },
+            "量子サイエンス入門": { category: "専門_その他" },
+            "機械知能・航空研修A": { category: "専門_その他" },
+            "エネルギー環境入門": { category: "専門_その他" },
+            "機械知能・航空実験Ⅰ": { category: "専門_その他" },
+            "機械知能・航空研修Ⅱ": { category: "専門_その他" },
+            "機械工作実習": { category: "専門_その他" },
+            "機械知能・航空研修A2": { category: "専門_その他" },
+            "機械知能・航空実験A": { category: "専門_その他" },
+            "機械知能・航空研修B": { category: "専門_その他" },
+            "コンピュータ実習Ⅱ": { category: "専門_その他" },
+            "機械知能・航空実験Ⅱ": { category: "専門_その他" },
+            "計画及び製図Ⅱ": { category: "専門_その他" },
+            "機械知能・航空実験B": { category: "専門_その他" },
+            "エネルギー環境コース特別講義": { category: "専門_その他" },
+            "学外見学(補足1)": { category: "専門_その他" },
+            "学外実習": { category: "専門_その他" },
+            "機械知能・航空特別研修": { category: "専門_その他" },
+            "機械知能・航空特別講義Ⅰ(補足2)": { category: "専門_その他" },
+            "機械知能・航空特別講義Ⅱ": { category: "専門_その他" },
+            "国際工学研修Ⅰ〜Ⅳ": { category: "専門_その他" },
+            "工学教育院特別講義": { category: "専門_その他" },
+            "卒業研究": { category: "専門_その他" }
+        };
+
+        // Logic Functions
+        function resolveSubstitutions(progress) {
+            let finalSentaku3 = progress.zen_sentaku3;
+            let remainingSentaku4 = progress.zen_sentaku4;
+
+            if (finalSentaku3 < 6 && remainingSentaku4 > 0) {
+                let shortfall = 6 - finalSentaku3;
+                let transferable = Math.min(shortfall, remainingSentaku4, 2); // Max 2 credits
+                finalSentaku3 += transferable;
+                progress.zen_sentaku4 -= transferable;
+            }
+            return finalSentaku3;
+        }
+
+        function check3rdSemester(progress, course) {
+            let errors = [];
+
+            if (!progress.passedSpecificSubjects.includes("自然科学総合実験")) {
+                errors.push("未達成: 「自然科学総合実験」の修得");
+            }
+
+            let group24Total = progress.zen_hissyu + progress.zen_sentaku4 + progress.sen_kyotsu;
+            if (group24Total < 24) {
+                errors.push(`未達成: 指定群(自然科学・情報・学術基礎・工学共通)から24単位 (現在: ${group24Total.toFixed(1)}単位 / 不足: ${(24 - group24Total).toFixed(1)}単位)`);
+            }
+
+            let hissyu15Total = progress.zen_hissyu + progress.sen_kyotsu;
+            if (hissyu15Total < 15) {
+                errors.push(`未達成: 必修群科目から15単位 (現在: ${hissyu15Total.toFixed(1)}単位 / 不足: ${(15 - hissyu15Total).toFixed(1)}単位)`);
+            }
+
+            if (progress.zen_lang < 4) {
+                errors.push(`未達成: 外国語群から4単位 (現在: ${progress.zen_lang.toFixed(1)}単位)`);
+            }
+
+            let sen12Total = progress.sen_sentaku_hit_1 + progress.sen_sentaku_hit_2;
+            if (sen12Total < 12) {
+                errors.push(`未達成: 専門[選択必修①][②]から12単位 (現在: ${sen12Total.toFixed(1)}単位)`);
+            }
+
+            return errors;
+        }
+
+        function check6thSemester(progress, course) { // Mock based on probable rules
+            let errors = [];
+            if (progress.totalCredits < 100) {
+                errors.push(`未達成: 総取得単位数100単位 (現在: ${progress.totalCredits.toFixed(1)}単位)`);
+            }
+            if (progress.sen_hissyu < 20) {
+                errors.push(`未達成: 専門学科必修20単位 (現在: ${progress.sen_hissyu.toFixed(1)}単位)`);
+            }
+            return errors;
+        }
+
+        function checkGraduation(progress, course) { // Mock based on spec
+            let errors = [];
+            if (progress.totalCredits < 130) {
+                errors.push(`未達成: 卒業要件総単位130単位 (現在: ${progress.totalCredits.toFixed(1)}単位)`);
+            }
+
+            let totalZen = progress.zen_hissyu + progress.zen_sentaku1 + progress.zen_sentaku2 + progress.zen_sentaku3 + progress.zen_sentaku4;
+            if (totalZen < 39) { // Including applied subs
+                errors.push(`未達成: 全学教育群39単位 (現在: ${totalZen.toFixed(1)}単位)`);
+            }
+            return errors;
+        }
+
+
+        function App() {
+            const [inputText, setInputText] = useState("");
+            const [selectedCourse, setSelectedCourse] = useState(COURSES[0]);
+            const [manualCategories, setManualCategories] = useState({});
+            const [parsedData, setParsedData] = useState([]);
+            const [error, setError] = useState(null);
+
+            const lineChartRef = useRef(null);
+            const pieChartRef = useRef(null);
+            const lineChartInstance = useRef(null);
+            const pieChartInstance = useRef(null);
+
+            // Parsing Logic
+            const parseGrades = (text) => {
+                if (!text.trim()) {
+                    setParsedData([]);
+                    setError(null);
+                    return;
+                }
+
+                const normalized = text.replace(/[Ａ-Ｚａ-ｚ０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).toUpperCase();
+                const lines = normalized.split('\n').map(l => l.trim()).filter(Boolean);
+
+                const results = [];
+                let parsedCount = 0;
+
+                for (const line of lines) {
+                    const match = line.match(/^(.*?)\s*(\d+\.\d+)\s*(AA|[A-E]|N)\s*(.*)$/i);
+                    if (match) {
+                        const rawName = match[1].trim();
+                        const credit = parseFloat(match[2]);
+                        const grade = match[3];
+                        const remainder = match[4];
+                        const termMatch = remainder.match(/(20\d{2}[^\s]{2,4})/);
+                        const term = termMatch ? termMatch[1] : 'Unknown';
+
+                        // Sub master check
+                        let category = "不明";
+                        if (SUBJECT_MASTER[rawName]) {
+                            category = SUBJECT_MASTER[rawName].category;
+                        } else if (manualCategories[rawName]) {
+                            category = manualCategories[rawName];
+                        }
+
+                        results.push({
+                            id: Math.random().toString(36).substr(2, 9),
+                            name: rawName,
+                            credit: credit,
+                            grade: grade,
+                            term: term,
+                            category: category,
+                            original: line
+                        });
+                        parsedCount++;
+                    }
+                }
+
+                if (parsedCount === 0 && lines.length > 0) {
+                    setError("テキストを解析できませんでした。フォーマットを確認してください。");
+                } else {
+                    setError(null);
+                    setParsedData(results.sort((a, b) => a.term.localeCompare(b.term)));
+                }
+            };
+
+            // Re-apply categories if manualCategories change without reparsing text
+            useEffect(() => {
+                if (parsedData.length > 0) {
+                    setParsedData(prev => prev.map(item => {
+                        if (SUBJECT_MASTER[item.name]) return { ...item, category: SUBJECT_MASTER[item.name].category };
+                        if (manualCategories[item.name]) return { ...item, category: manualCategories[item.name] };
+                        return { ...item, category: "不明" };
+                    }));
+                }
+            }, [manualCategories]);
+
+            const handleManualCatChange = (subjectName, newCat) => {
+                setManualCategories(prev => ({ ...prev, [subjectName]: newCat }));
+            };
+
+            // Calculation Logic
+            const stats = useMemo(() => {
+                let totalGP = 0;
+                let gpaDenominator = 0;
+                let gradeCounts = { 'AA': 0, 'A': 0, 'B': 0, 'C': 0, 'D': 0, 'N/E': 0 };
+
+                let progress = {
+                    totalCredits: 0, passedSpecificSubjects: [],
+                    zen_hissyu: 0, zen_sentaku1: 0, zen_sentaku2: 0, zen_sentaku3: 0, zen_sentaku4: 0, zen_lang: 0,
+                    sen_kyotsu: 0, sen_hissyu: 0, sen_sentaku_hit_1: 0, sen_sentaku_hit_2: 0, sen_sentaku_hit_3: 0, sen_other: 0,
+                    failedCredits: 0
+                };
+
+                const termGroups = {};
+
+                parsedData.forEach(c => {
+                    // GPA Calculation
+                    if (GRADE_POINTS[c.grade] !== undefined && c.grade !== 'N') {
+                        gpaDenominator += c.credit;
+                        totalGP += c.credit * GRADE_POINTS[c.grade];
+                    }
+
+                    // Distribution
+                    if (gradeCounts[c.grade] !== undefined) gradeCounts[c.grade] += 1;
+                    else gradeCounts['N/E'] += 1;
+
+                    // GPA Chart Stats
+                    if (c.term !== 'Unknown') {
+                        if (!termGroups[c.term]) termGroups[c.term] = { term: c.term, totalGP: 0, denominator: 0 };
+                        if (GRADE_POINTS[c.grade] !== undefined && c.grade !== 'N') {
+                            termGroups[c.term].denominator += c.credit;
+                            termGroups[c.term].totalGP += c.credit * GRADE_POINTS[c.grade];
+                        }
+                    }
+
+                    // Progress Requirements Calculation (AA~C, N)
+                    if (['AA', 'A', 'B', 'C', 'N'].includes(c.grade)) {
+                        progress.totalCredits += c.credit;
+                        progress.passedSpecificSubjects.push(c.name);
+
+                        switch (c.category) {
+                            case "全学_必修": progress.zen_hissyu += c.credit; break;
+                            case "全学_選択1": progress.zen_sentaku1 += c.credit; break;
+                            case "全学_選択2": progress.zen_sentaku2 += c.credit; break;
+                            case "全学_選択3": progress.zen_sentaku3 += c.credit; break;
+                            case "全学_選択4": progress.zen_sentaku4 += c.credit; break;
+                            case "全学_外国語": progress.zen_lang += c.credit; break;
+                            case "専門_工学共通": progress.sen_kyotsu += c.credit; break;
+                            case "専門_学科必修": progress.sen_hissyu += c.credit; break;
+                            case "専門_選択必修1": progress.sen_sentaku_hit_1 += c.credit; break;
+                            case "専門_選択必修2": progress.sen_sentaku_hit_2 += c.credit; break;
+                            case "専門_選択必修3": progress.sen_sentaku_hit_3 += c.credit; break;
+                            default: progress.sen_other += c.credit; break;
+                        }
+                    }
+                    if (['D', 'E'].includes(c.grade)) {
+                        progress.failedCredits += c.credit;
+                    }
+                });
+
+                // Apply logic (modifies progress object directly)
+                progress.zen_sentaku3 = resolveSubstitutions(progress);
+
+                const gpa = gpaDenominator > 0 ? (totalGP / gpaDenominator).toFixed(3) : "0.000";
+
+                const termChartData = Object.values(termGroups)
+                    .sort((a, b) => a.term.localeCompare(b.term))
+                    .map(t => ({
+                        term: t.term,
+                        gpa: t.denominator > 0 ? parseFloat((t.totalGP / t.denominator).toFixed(2)) : 0
+                    }))
+                    .filter(t => t.gpa > 0);
+
+                const pieLabels = [];
+                const pieDataVals = [];
+                Object.entries(gradeCounts).forEach(([name, value]) => {
+                    if (value > 0) { pieLabels.push(name); pieDataVals.push(value); }
+                });
+
+                return { gpa, progress, termChartData, pieLabels, pieDataVals, gpaDenominator };
+            }, [parsedData, selectedCourse]);
+
+            // Charts Initialization
+            useEffect(() => {
+                // Line Chart
+                if (stats.termChartData.length > 0 && lineChartRef.current) {
+                    if (lineChartInstance.current) lineChartInstance.current.destroy();
+                    const ctx = lineChartRef.current.getContext('2d');
+                    lineChartInstance.current = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: stats.termChartData.map(d => d.term),
+                            datasets: [{
+                                label: 'GPA', data: stats.termChartData.map(d => d.gpa),
+                                borderColor: '#4F46E5', backgroundColor: '#4F46E5', tension: 0.3, borderWidth: 3, pointRadius: 4, pointBackgroundColor: '#4F46E5'
+                            }]
+                        },
+                        options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 4, grid: { color: '#334155' }, ticks: { color: '#64748B' } }, x: { grid: { display: false }, ticks: { color: '#64748B' } } }, plugins: { legend: { display: false } } }
+                    });
+                }
+                // Pie Chart
+                if (stats.pieDataVals.length > 0 && pieChartRef.current) {
+                    if (pieChartInstance.current) pieChartInstance.current.destroy();
+                    const ctx = pieChartRef.current.getContext('2d');
+                    pieChartInstance.current = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: { labels: stats.pieLabels, datasets: [{ data: stats.pieDataVals, backgroundColor: COLORS, borderWidth: 0, hoverOffset: 4 }] },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#F8FAFC' } } }, cutout: '70%' }
+                    });
+                }
+            }, [stats.termChartData, stats.pieDataVals]);
+
+            // Trackers Status
+            const barrier3Errors = check3rdSemester(stats.progress, selectedCourse);
+            const barrier6Errors = check6thSemester(stats.progress, selectedCourse);
+            const gradErrors = checkGraduation(stats.progress, selectedCourse);
+
+            const unknowns = parsedData.filter(d => d.category === "不明");
+            const uniqueUnknowns = Array.from(new Set(unknowns.map(u => u.name)));
+
+            const TrackerCard = ({ title, errors, children }) => {
+                const isClear = errors.length === 0 && parsedData.length > 0;
+                const [isOpen, setIsOpen] = useState(false);
+                return (
+                    <div className="bg-surface border border-slate-700 rounded-2xl shadow-lg overflow-hidden">
+                        <button onClick={() => setIsOpen(!isOpen)} className="w-full flex items-center justify-between p-5 hover:bg-slate-700/30 transition-colors">
+                            <div className="flex items-center gap-3">
+                                {parsedData.length === 0 ? <div className="w-5 h-5 rounded-full bg-slate-600"></div> : isClear ? <CheckIcon /> : <AlertTriIcon />}
+                                <h3 className="font-semibold text-lg text-white">{title}</h3>
+                            </div>
+                            <div className="text-slate-400">
+                                {isOpen ? "▲" : "▼"}
+                            </div>
+                        </button>
+                        {isOpen && (
+                            <div className="p-5 border-t border-slate-700 bg-slate-800/50">
+                                {parsedData.length === 0 ? (
+                                    <p className="text-slate-400 text-sm">データを入力してください。</p>
+                                ) : errors.length > 0 ? (
+                                    <ul className="space-y-2 text-sm text-red-400 font-medium">
+                                        {errors.map((e, i) => <li key={i} className="flex gap-2 items-start"><span className="mt-0.5">•</span><span>{e}</span></li>)}
+                                    </ul>
+                                ) : (
+                                    <p className="text-emerald-400 text-sm font-medium">条件を満たしています！</p>
+                                )}
+                                {children && <div className="mt-4 border-t border-slate-700 pt-4">{children}</div>}
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            return (
+                <div className="max-w-7xl mx-auto space-y-8">
+                    {/* Header */}
+                    <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-surface pb-6">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-primary/20 p-3 rounded-xl text-primary"><CalculatorIcon /></div>
+                            <div>
+                                <h1 className="text-3xl font-bold tracking-tight text-white">GPA & Graduation Tracker</h1>
+                                <p className="text-slate-400 mt-1">東北大学 工学部（機械知能・航空工学科）特化</p>
+                            </div>
+                        </div>
+                        <div className="bg-surface p-3 rounded-xl border border-slate-700">
+                            <label className="text-xs text-slate-400 block mb-1 font-medium">コース選択</label>
+                            <select
+                                value={selectedCourse}
+                                onChange={(e) => setSelectedCourse(e.target.value)}
+                                className="bg-dark text-white text-sm font-semibold p-2 pr-8 rounded-lg outline-none border border-slate-600 focus:border-primary"
+                            >
+                                {COURSES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                    </header>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+
+                        {/* Left Column: Input */}
+                        <div className="xl:col-span-1 space-y-6">
+                            <div className="bg-surface border border-slate-700 rounded-2xl p-6 shadow-xl">
+                                <h2 className="text-xl font-semibold mb-2">データの入力</h2>
+                                <p className="text-xs text-slate-400 mb-4 pb-4 border-b border-slate-700">ISTU等の成績表をコピー＆ペースト</p>
+                                <textarea
+                                    className="w-full h-48 bg-dark border border-slate-700 rounded-xl p-4 text-sm text-slate-200 focus:ring-2 focus:ring-primary focus:border-transparent outline-none resize-y"
+                                    placeholder="例:&#10;流体力学Ⅰ 2.0 ＡＡ ○ 2023前期&#10;論理学 2.0 Ａ 2022後期"
+                                    value={inputText}
+                                    onChange={(e) => setInputText(e.target.value)}
+                                ></textarea>
+                                {error && <div className="mt-3 p-3 bg-red-900/30 border border-red-800 rounded-lg flex items-start gap-2 text-red-400 text-sm"><AlertIcon /><span>{error}</span></div>}
+                                <button onClick={() => parseGrades(inputText)} className="mt-4 w-full bg-primary hover:bg-indigo-500 text-white font-medium py-3 rounded-xl transition-colors shadow-lg shadow-primary/20">
+                                    解析して計算する
+                                </button>
+                            </div>
+
+                            {uniqueUnknowns.length > 0 && (
+                                <div className="bg-amber-900/20 border border-amber-700/50 rounded-2xl p-5 shadow-xl">
+                                    <h3 className="text-amber-400 font-semibold flex items-center gap-2 mb-3"><AlertTriIcon /> 未分類科目があります</h3>
+                                    <p className="text-xs text-amber-200/70 mb-4">マスターデータに存在しない科目です。要件計算のために区分を手動で割り当ててください。</p>
+                                    <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+                                        {uniqueUnknowns.map(name => (
+                                            <div key={name} className="bg-dark/50 p-2.5 rounded-lg border border-amber-900/30">
+                                                <p className="text-sm text-slate-200 font-medium mb-1 truncate">{name}</p>
+                                                <select
+                                                    value={manualCategories[name] || "不明"}
+                                                    onChange={(e) => handleManualCatChange(name, e.target.value)}
+                                                    className="w-full bg-slate-800 text-xs text-white p-1.5 rounded outline-none border border-slate-600"
+                                                >
+                                                    {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat.replace('_', ' ')}</option>)}
+                                                </select>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Right Column: Dashboards & Needs */}
+                        <div className="xl:col-span-2 space-y-6">
+
+                            {/* Dashboard Cards (Top) */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="bg-surface border border-slate-700 rounded-2xl p-5 shadow-lg relative overflow-hidden">
+                                    <p className="text-slate-400 text-xs font-medium mb-1">通算GPA</p>
+                                    <p className="text-3xl font-bold text-white mb-1">{stats.gpa}</p>
+                                    <p className="text-[10px] text-slate-500">対象: {stats.gpaDenominator}単位</p>
+                                </div>
+                                <div className="bg-surface border border-slate-700 rounded-2xl p-5 shadow-lg">
+                                    <p className="text-slate-400 text-xs font-medium mb-1">総修得単位</p>
+                                    <p className="text-3xl font-bold text-emerald-400">{stats.progress.totalCredits}</p>
+                                </div>
+                                <div className="bg-surface border border-slate-700 rounded-2xl p-5 shadow-lg hidden md:block">
+                                    <p className="text-slate-400 text-xs font-medium mb-1">未修得(D/E)</p>
+                                    <p className="text-3xl font-bold text-red-500">{stats.progress.failedCredits}</p>
+                                </div>
+                                <div className="bg-surface border border-slate-700 rounded-2xl p-5 shadow-lg hidden md:block">
+                                    <p className="text-slate-400 text-xs font-medium mb-1">全学教育単位</p>
+                                    <p className="text-3xl font-bold text-blue-400">
+                                        {stats.progress.zen_hissyu + stats.progress.zen_sentaku1 + stats.progress.zen_sentaku2 + stats.progress.zen_sentaku3 + stats.progress.zen_sentaku4}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Requirements Tracker */}
+                            <div className="space-y-4">
+                                <h2 className="text-xl font-semibold flex items-center gap-2 mt-4 text-white">
+                                    要件チェッカー
+                                </h2>
+
+                                <TrackerCard title="3セメスターバリア" errors={barrier3Errors} />
+                                <TrackerCard title="6セメスターバリア" errors={barrier6Errors} />
+
+                                <TrackerCard title="卒業要件 (130単位)" errors={gradErrors}>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <div className="flex justify-between text-xs mb-1">
+                                                <span className="text-slate-300">全体の進捗</span>
+                                                <span className="text-emerald-400 font-medium">{stats.progress.totalCredits.toFixed(1)} / 130 単位</span>
+                                            </div>
+                                            <div className="w-full bg-slate-700 rounded-full h-2">
+                                                <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${Math.min((stats.progress.totalCredits / 130) * 100, 100)}%` }}></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </TrackerCard>
+                            </div>
+
+                            {/* Charts */}
+                            {parsedData.length > 0 && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                                    <div className="bg-surface border border-slate-700 rounded-2xl p-6 shadow-lg h-64 flex flex-col">
+                                        <h3 className="text-sm font-medium text-slate-300 mb-2">学期ごとのGPA推移</h3>
+                                        <div className="flex-1 relative"><canvas ref={lineChartRef}></canvas></div>
+                                    </div>
+                                    <div className="bg-surface border border-slate-700 rounded-2xl p-6 shadow-lg h-64 flex flex-col">
+                                        <h3 className="text-sm font-medium text-slate-300 mb-2">評価分布</h3>
+                                        <div className="flex-1 relative"><canvas ref={pieChartRef}></canvas></div>
+                                    </div>
+                                </div>
+                            )}
+
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
