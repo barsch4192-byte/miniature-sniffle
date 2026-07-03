@@ -1,320 +1,768 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>U-Tube Vibration Simulator</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <style>
-    :root {
-      --bg-color: #0d1117;
-      --panel-bg: #161b22;
-      --text-color: #c9d1d9;
-      --accent: #58a6ff;
-      --tube-color: rgba(255, 255, 255, 0.2);
-      --liquid-1: #00f2fe;
-      --liquid-2: #ff0844;
-    }
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-    }
-    header {
-      padding: 20px;
-      text-align: center;
-      width: 100%;
-      border-bottom: 1px solid var(--panel-bg);
-      background: rgba(13, 17, 23, 0.9);
-      backdrop-filter: blur(10px);
-    }
-    h1 {
-      margin: 0;
-      font-size: 1.8rem;
-      font-weight: 600;
-      letter-spacing: 1px;
-    }
-    .container {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-top: 30px;
-      gap: 30px;
-      padding: 0 20px;
-      max-width: 1200px;
-      width: 100%;
-    }
-    .canvas-container {
-      position: relative;
-      background: var(--panel-bg);
-      border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-      overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.05);
-    }
-    canvas {
-      display: block;
-    }
-    .controls {
-      background: var(--panel-bg);
-      padding: 24px;
-      border-radius: 12px;
-      width: 100%;
-      max-width: 800px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      border: 1px solid rgba(255,255,255,0.05);
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 20px;
-    }
-    .control-group {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    label {
-      font-size: 0.9rem;
-      font-weight: 500;
-      display: flex;
-      justify-content: space-between;
-    }
-    .value-display {
-      color: var(--accent);
-      font-weight: bold;
-    }
-    input[type=range] {
-      -webkit-appearance: none;
-      width: 100%;
-      background: transparent;
-    }
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      height: 16px;
-      width: 16px;
-      border-radius: 50%;
-      background: var(--accent);
-      cursor: pointer;
-      margin-top: -6px;
-      box-shadow: 0 0 10px rgba(88, 166, 255, 0.5);
-    }
-    input[type=range]::-webkit-slider-runnable-track {
-      width: 100%;
-      height: 4px;
-      cursor: pointer;
-      background: rgba(255,255,255,0.1);
-      border-radius: 2px;
-    }
-    .info {
-      font-size: 0.85rem;
-      color: #8b949e;
-      margin-top: 5px;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <title>2次元・1次元シュレディンガー方程式シミュレーター</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/numeric/1.2.6/numeric.min.js"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background: #f5f5f5; color: #333; }
+        .container { max-width: 1100px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px #0002; }
+        .controls { margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .controls button {
+            padding: 6px 12px;
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        .controls button:hover {
+            background: #f5f5f5;
+            border-color: #adadad;
+        }
+        .controls button.active {
+            background: #2196f3;
+            color: white;
+            border-color: #1976d2;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+        }
+        .main-layout { display: flex; gap: 20px; flex-wrap: wrap; }
+        .chart-container { flex: 1 1 650px; position: relative; height: 450px; }
+        .energy-panel { flex: 0 0 280px; background: #fafafa; border: 1px solid #ddd; border-radius: 6px; padding: 15px; display: flex; flex-direction: column; }
+        .energy-panel h3 { margin-top: 0; font-size: 1.1rem; color: #444; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+        .energy-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; max-height: 380px; }
+        .energy-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #fff; border: 1px solid #e0e0e0; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; }
+        .energy-item:hover { background: #f0f4f8; border-color: #b0c4de; }
+        .energy-item.active { background: #e3f2fd; border-color: #2196f3; font-weight: bold; box-shadow: 0 1px 3px rgba(33, 150, 243, 0.2); }
+        .energy-item .n-val { color: #1565c0; }
+        .energy-item .e-val { font-family: monospace; font-size: 0.95rem; color: #333; }
+        canvas { background: #fff; border: 1px solid #ccc; width: 100%; height: 100%; cursor: crosshair; }
+        
+        /* スライドトグル用スタイル */
+        .accordion-header {
+            font-weight: bold;
+            cursor: pointer;
+            outline: none;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: color 0.2s ease, background-color 0.2s ease;
+        }
+        
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out;
+        }
+        
+        /* 親アコーディオン */
+        .parent-accordion {
+            margin-bottom: 15px;
+            background: #e0e0e0;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            overflow: hidden;
+            transition: background-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .parent-accordion.open {
+            background: #f9f9f9;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .parent-header {
+            font-size: 1.15rem;
+            color: #0d47a1;
+            padding: 12px 18px;
+        }
+        .parent-header:hover {
+            color: #1565c0;
+            background: #d5d5d5;
+        }
+        .parent-accordion.open > .parent-header {
+            background: #eceff1;
+        }
+        .parent-content-inner {
+            padding: 6px 18px 18px 18px;
+        }
+        
+        /* 子アコーディオン */
+        .child-accordion {
+            margin-top: 12px;
+            margin-bottom: 8px;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .child-header {
+            font-size: 1.02rem;
+            color: #1565c0;
+            padding: 10px 14px;
+            background: #fafafa;
+        }
+        .child-header:hover {
+            color: #0d47a1;
+            background: #f0f0f0;
+        }
+        .child-accordion.open > .child-header {
+            background: #f5f5f5;
+        }
+        .child-content-inner {
+            padding: 12px 14px;
+            border-left: 3px solid #1565c0;
+            line-height: 1.6;
+        }
+        
+        /* 矢印アイコン */
+        .arrow-icon {
+            display: inline-block;
+            transition: transform 0.3s ease-in-out;
+            font-size: 0.8rem;
+        }
+        .open > .accordion-header > .arrow-icon {
+            transform: rotate(90deg);
+        }
+        
+        /* Tipsアコーディオン */
+        .tips-accordion {
+            background: #f0f4f8;
+            border: 1px solid #d0dbe5;
+            border-radius: 4px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+        .tips-header {
+            color: #2e7d32;
+            font-size: 0.9rem;
+            padding: 8px 12px;
+        }
+        .tips-header:hover {
+            color: #1b5e20;
+            background: #e8f5e9;
+        }
+        .tips-accordion.open > .tips-header {
+            background: #e8f5e9;
+        }
+        .tips-content-inner {
+            padding: 10px 12px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+    </style>
 </head>
 <body>
-  <div id="root"></div>
 
-  <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+<div class="container">
+    <h2>1次元シュレディンガー方程式ソルバー</h2>
+    <div class="controls" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        <span style="font-weight: bold; margin-right: 5px;">ポテンシャル・プリセット:</span>
+        <button id="btn-flat" onclick="applyPreset('flat')">平坦</button>
+        <button id="btn-well" onclick="applyPreset('well')">有限深さの井戸</button>
+        <button id="btn-atom" onclick="applyPreset('atom')">原子核の再現 (球面調和関数)</button>
+        <button id="btn-center-wall" onclick="applyPreset('center-wall')">中央に壁</button>
+        <button id="btn-right-wall" onclick="applyPreset('right-wall')">右にずれた壁</button>
+        <span id="customLabel" style="font-size: 0.9rem; color: #888; margin-left: 10px; display: none;">(カスタム描画中)</span>
+    </div>
+    <div class="main-layout">
+        <div class="chart-container">
+            <canvas id="simChart"></canvas>
+        </div>
+        <div class="energy-panel">
+            <h3>エネルギー準位 (n = 1 ~ 10)</h3>
+            <div id="energyList" class="energy-list"></div>
+        </div>
+    </div>
+</div>
 
-    const App = () => {
-      const [frequency, setFrequency] = useState(1.0); // Hz
-      const [amplitude, setAmplitude] = useState(40); // px
-      const canvasRef = useRef(null);
+<div class="explanation" style="margin-top: 40px; border-top: 1px solid #ccc; padding-top: 20px; line-height: 1.6; color: #333;">
+    <h3 style="margin-bottom: 20px;">📖 物理・アルゴリズム徹底解説 (項目クリックでスライド開閉)</h3>
 
-      // Simulation constants
-      const fn = 1.0; // Natural frequency (Hz)
-      const wn = 2 * Math.PI * fn;
-      const zeta = 0.15; // Damping ratio
+    <!-- 大章1 -->
+    <div class="parent-accordion" id="parent-1">
+        <div class="parent-header accordion-header">
+            <span>1. 量子力学の基礎と物理現象</span>
+            <span class="arrow-icon">▶</span>
+        </div>
+        <div class="accordion-content">
+            <div class="parent-content-inner">
+                
+                <!-- 節 1-1 -->
+                <div class="child-accordion" id="child-1-1">
+                    <div class="child-header accordion-header">
+                        <span>1-1. シュレディンガー方程式とは？（ミクロな世界の基本方程式）</span>
+                        <span class="arrow-icon">▶</span>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="child-content-inner">
+                            <p>
+                                私たちの日常（マクロな世界）では、物体はニュートンの運動方程式（\(F=ma\)）に従って正確な「軌道」を描いて動きます。しかし、電子のような極限に小さなミクロの世界では、粒子はぼやけた「波」のような性質を示し、その居場所を正確に突き止めることはできません。
+                            </p>
+                            <p>
+                                このミクロな世界の波が従う基本方程式が、<b>時間に依存しないシュレディンガー方程式</b>です。
+                                $$ \left( -\frac{\hbar^2}{2m} \frac{d^2}{dx^2} + V(x) \right) \psi(x) = E \psi(x) $$
+                                ここで、\( \psi(x) \) は「波動関数」と呼ばれ、その値を2乗した \( |\psi(x)|^2 \) が<b>「粒子がその位置に見つかる存在確率」</b>を表します。\( V(x) \) はユーザーが画面に描いた「ポテンシャル（壁や障害物）」、\( E \) はその状態が持つ「全エネルギー」です。
+                            </p>
+                        </div>
+                    </div>
+                </div>
 
-      useEffect(() => {
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        let animationFrameId;
-        const startTime = performance.now();
+                <!-- 節 1-2 -->
+                <div class="child-accordion" id="child-1-2">
+                    <div class="child-header accordion-header">
+                        <span>1-2. 各プリセットが表現する物理現象</span>
+                        <span class="arrow-icon">▶</span>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="child-content-inner">
+                            <p>上のボタンで一発呼び出しできるプリセットは、それぞれ量子力学の極めて重要な教科書的現象を表現しています。</p>
+                            <ul>
+                                <li style="margin-bottom: 12px;"><strong>平坦（無限に深い井戸型ポテンシャル）:</strong><br>
+                                左右の壁（\(x = \pm 5.0\)）の外側は侵入禁止（ポテンシャル無限大）で、中だけは自由に動ける状態です。ギターの弦のように、端っこが固定された綺麗なサイン波（定常波）が現れます。</li>
+                                
+                                <li style="margin-bottom: 12px;"><strong>有限深さの井戸:</strong><br>
+                                中央にだけ「電子が落ち着ける深い溝（ポテンシャルがマイナス）」を掘った状態です。エネルギーが低い状態（\(n=1\)など）では、電子はこの溝の中にシュッとトラップされます（束縛状態）。驚くべきことに、本来は進入禁止のはずの「溝の外側の壁」の中にも、波がわずかに滲み出している様子（トンネル効果）が観察できます。</li>
+                                
+                                <li style="margin-bottom: 12px;"><strong>原子核の再現（球面調和関数・\(s\)軌道）:</strong><br>
+                                中心にプラスの電気を持った原子核（陽子）がいて、マイナスの電気を持つ電子を引きつけている状態です。1次元上で中心からの距離に反比例するクーロン引力を表現するため、中心で発散しないように滑らかに近似した以下のソフトコアクーロンポテンシャル数式を使用しています。
+                                $$ V(x) = -\frac{Z}{\sqrt{x^2 + \alpha^2}} \quad (Z=8.0, \, \alpha=0.8) $$
+                                これは、3次元における水素原子の最も基本的な基底状態である<b>「\(s\)軌道」</b>（球面対称な波動関数）の動径方向の振る舞いを美しく再現するモデルに対応しています。エネルギーレベルが低いほど中心に激しく電子が吸い寄せられ、エネルギーが高くなると外側まで波が広がっていきます。</li>
+                                
+                                <li style="margin-bottom: 12px;"><strong>中央に壁 / 右にずれた壁（二重井戸と局在化）:</strong><br>
+                                箱を壁で2つの部屋に区切ったモデルです。
+                                壁が完全に「中央」にあるときは左右対称なので、波も左右に等しく現れます。しかし、壁を「右にほんの少しだけズラす」と、左の部屋と右の部屋の広さにわずかな差が生まれます。すると、エネルギー状態（\(n\)の値）によって、電子が100%左の部屋に引きこもったり、100%右の部屋に引きこもったりする<b>「状態の局在化」</b>というドラマチックな逆転現象が発生します。</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
 
-        const drawTube = (xOffset, label, liquidColor, yLevel) => {
-          const width = 100;
-          const height = 250;
-          const thickness = 20;
-          const bottomY = 320;
-          const topY = bottomY - height;
-          const centerX = xOffset;
-          
-          ctx.save();
-          // Draw Glass Tube
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-          ctx.lineWidth = 4;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          
-          ctx.beginPath();
-          // Left arm
-          ctx.moveTo(centerX - width/2, topY);
-          ctx.lineTo(centerX - width/2, bottomY);
-          // Bottom curve
-          ctx.arc(centerX, bottomY, width/2, Math.PI, 0, true);
-          // Right arm
-          ctx.lineTo(centerX + width/2, topY);
-          ctx.stroke();
-
-          // Draw Liquid
-          // Liquid rests at baseline
-          const baseline = topY + height * 0.5; 
-          
-          // In a U-tube, if one side goes up by yLevel, the other goes down by yLevel
-          const leftLevel = baseline - yLevel;
-          const rightLevel = baseline + yLevel;
-
-          const gradient = ctx.createLinearGradient(0, topY, 0, bottomY + width/2);
-          gradient.addColorStop(0, liquidColor);
-          gradient.addColorStop(1, '#000000'); // dark at bottom
-          
-          ctx.fillStyle = gradient;
-          ctx.beginPath();
-          ctx.moveTo(centerX - width/2 + 2, leftLevel);
-          ctx.lineTo(centerX - width/2 + 2, bottomY);
-          ctx.arc(centerX, bottomY, width/2 - 2, Math.PI, 0, true);
-          ctx.lineTo(centerX + width/2 - 2, rightLevel);
-          ctx.lineTo(centerX + width/2 - 2, bottomY);
-          // Close the shape by drawing back
-          ctx.arc(centerX, bottomY, width/2 - 2, 0, Math.PI, false);
-          ctx.fill();
-          
-          // Liquid surface highlights
-          ctx.fillStyle = 'rgba(255,255,255,0.8)';
-          ctx.beginPath();
-          ctx.ellipse(centerX - width/2 + 2, leftLevel, thickness/2 - 2, 3, 0, 0, Math.PI*2);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.ellipse(centerX + width/2 - 2, rightLevel, thickness/2 - 2, 3, 0, 0, Math.PI*2);
-          ctx.fill();
-
-          // Label
-          ctx.fillStyle = '#c9d1d9';
-          ctx.font = '16px Segoe UI';
-          ctx.textAlign = 'center';
-          ctx.fillText(label, centerX, bottomY + 80);
-          
-          ctx.restore();
-        };
-
-        const render = (time) => {
-          const t = (time - startTime) / 1000; // seconds
-
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          
-          // Draw Grid
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
-          ctx.lineWidth = 1;
-          for(let i=0; i<canvas.width; i+=40) {
-            ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
-          }
-          for(let i=0; i<canvas.height; i+=40) {
-            ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
-          }
-
-          // Input physics
-          const w = 2 * Math.PI * frequency;
-          const y1 = amplitude * Math.sin(w * t);
-
-          // Response physics (Steady state 2nd order system response)
-          const r = frequency / fn; // Frequency ratio
-          const M = 1 / Math.sqrt(Math.pow(1 - r*r, 2) + Math.pow(2 * zeta * r, 2)); // Magnification factor
-          let phase = Math.atan2(2 * zeta * r, 1 - r*r); // Phase lag
-          const y2 = M * amplitude * Math.sin(w * t - phase);
-
-          drawTube(200, "Forced Vibration (Input)", "rgba(0, 242, 254, 0.8)", y1);
-          drawTube(600, "Responding Vibration (Output)", "rgba(255, 8, 68, 0.8)", y2);
-
-          // Draw real-time data
-          ctx.fillStyle = '#c9d1d9';
-          ctx.font = '14px Consolas';
-          ctx.textAlign = 'left';
-          ctx.fillText(`Input Amp: ${amplitude.toFixed(1)} px`, 30, 40);
-          ctx.fillText(`Output Amp: ${(M * amplitude).toFixed(1)} px`, 430, 40);
-          ctx.fillText(`Freq Ratio (f/fn): ${r.toFixed(2)}`, 30, 65);
-          ctx.fillText(`Magnification (M): ${M.toFixed(2)}`, 430, 65);
-          ctx.fillText(`Phase Lag: ${(phase * 180 / Math.PI).toFixed(1)}°`, 430, 90);
-          
-          // Crosshairs for resonance indication
-          if (r > 0.95 && r < 1.05) {
-             ctx.fillStyle = '#ffcc00';
-             ctx.fillText(`🔥 RESONANCE WARNING 🔥`, 430, 115);
-          }
-
-          animationFrameId = requestAnimationFrame(render);
-        };
-
-        animationFrameId = requestAnimationFrame(render);
-
-        return () => {
-          cancelAnimationFrame(animationFrameId);
-        };
-      }, [frequency, amplitude]);
-
-      return (
-        <React.Fragment>
-          <header>
-            <h1>U-Tube Vibration Simulator</h1>
-          </header>
-          
-          <div className="container">
-            <div className="canvas-container">
-              <canvas 
-                ref={canvasRef} 
-                width={800} 
-                height={450}
-              />
             </div>
+        </div>
+    </div>
+
+    <!-- 大章2 -->
+    <div class="parent-accordion" id="parent-2">
+        <div class="parent-header accordion-header">
+            <span>2. 数値計算アルゴリズムとソルバー</span>
+            <span class="arrow-icon">▶</span>
+        </div>
+        <div class="accordion-content">
+            <div class="parent-content-inner">
+                
+                <!-- 節 2-1 -->
+                <div class="child-accordion" id="child-2-1">
+                    <div class="child-header accordion-header">
+                        <span>2-1. 微分方程式を「行列のパズル」に翻訳する（5要素での例）</span>
+                        <span class="arrow-icon">▶</span>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="child-content-inner">
+                            <p>
+                                コンピュータは、連続な数式や微分をそのまま扱うことができません。そこで、空間をバラバラの「点（グリッド）」に細切れにします（有限差分法）。<br>
+                                もし、空間をたったの<b>5つの点</b>（\(N=5\)）に分けたとすると、知りたい波動関数は5つの数字が並んだただの「縦ベクトル」になります。
+                                $$ \vec{\psi} = \begin{pmatrix} \psi_1 \\ \psi_2 \\ \psi_3 \\ \psi_4 \\ \psi_5 \end{pmatrix} $$
+                                そして、シュレディンガー方程式の心臓部である「2階微分」を、隣り合う点との引き算（2階差分）に置き換えます。物理定数をひとまとめにして \( t = \frac{\hbar^2}{2m\Delta x^2} \) と置くと、ある点 \( i \) での式は以下のようにただの引き算になります。
+                                $$ -t\psi_{i-1} + (2t + V_i)\psi_i - t\psi_{i+1} = E\psi_i $$
+                                これを5つの点すべてで書き並べ、線形代数のルールで1つの巨大な「行列の掛け算」にまとめると、以下のようなスッキリした形に変身します。
+                                $$
+                                \begin{pmatrix}
+                                2t + V_1 & -t & 0 & 0 & 0 \\
+                                -t & 2t + V_2 & -t & 0 & 0 \\
+                                0 & -t & 2t + V_3 & -t & 0 \\
+                                0 & 0 & -t & 2t + V_4 & -t \\
+                                0 & 0 & 0 & -t & 2t + V_5
+                                \end{pmatrix}
+                                \begin{pmatrix}
+                                \psi_1 \\ \psi_2 \\ \psi_3 \\ \psi_4 \\ \psi_5
+                                \end{pmatrix}
+                                = E
+                                \begin{pmatrix}
+                                \psi_1 \\ \psi_2 \\ \psi_3 \\ \psi_4 \\ \psi_5
+                                \end{pmatrix}
+                                $$
+                                数式を大きく置き換えれば、まさに学校で習う <b>\( H\vec{\psi} = E\vec{\psi} \) （行列の固有値問題）</b> そのものです。ユーザーがマウスで壁を描くと、この行列の斜めの成分（対角成分の \(V_1 \sim V_5\)）だけがリアルタイムに書き換わる仕組みになっています。
+                            </p>
+                            
+                            <!-- 孫アコーディオン (Tips) -->
+                            <div class="tips-accordion">
+                                <div class="tips-header accordion-header">
+                                    <span>💡 補足：2階差分はどうやって出した？</span>
+                                    <span class="arrow-icon">▶</span>
+                                </div>
+                                <div class="accordion-content">
+                                    <div class="tips-content-inner">
+                                        1階微分が「現在の点と、1個前の点の引き算（傾き）」であるなら、2階微分は「1個先の点への傾きの変化量」です。<br>
+                                        位置 \(x\) から右への傾きは \( \frac{\psi_{i+1}-\psi_i}{\Delta x} \)、左への傾きは \( \frac{\psi_i-\psi_{i-1}}{\Delta x} \)。この2つの傾き同士をさらに引き算して \(\Delta x\) で割ることで、中央の点 \(i\) を基準とした綺麗に対称な引き算の形 \( \frac{\psi_{i+1} - 2\psi_i + \psi_{i-1}}{\Delta x^2} \) が導かれます。
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 節 2-2 -->
+                <div class="child-accordion" id="child-2-2">
+                    <div class="child-header accordion-header">
+                        <span>2-2. 固有値を計算すると、なぜ波が求まるのか？</span>
+                        <span class="arrow-icon">▶</span>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="child-content-inner">
+                            <p>
+                                上の \( H\vec{\psi} = E\vec{\psi} \) という行列のパズルを数学的に解くと、<b>「固有値 \(E\)（エネルギー）」と「固有ベクトル \(\vec{\psi}\)（波動関数の形）」のセットが、空間の分割数（このアプリでは \(N=100\) 個）だけ同時にドバッと算出されます。</b>
+                            </p>
+                            <p>
+                                この算出されたたくさんのエネルギーのうち、<b>一番値が小さい固有値</b>が、電子が最も省エネで安定している状態である「エネルギー準位 \(n=1\)（基底状態）」に対応します。そのときの固有ベクトル（5つ、または100の数字の並び）をグラフに一本の線としてプロットすると、中央がふくらんだ綺麗な1本の「波動関数の山」が出現します。
+                            </p>
+                            <p>
+                                2番目に小さい固有値なら \(n=2\)、3番目なら \(n=3\) となり、エネルギーが高くなるにつれて、固有ベクトルの波のギザギザ（節の数）がどんどん増えていくことになります。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 節 2-3 -->
+                <div class="child-accordion" id="child-2-3">
+                    <div class="child-header accordion-header">
+                        <span>2-3. このアプリの裏で動く高精度ソルバーの仕組み</span>
+                        <span class="arrow-icon">▶</span>
+                    </div>
+                    <div class="accordion-content">
+                        <div class="child-content-inner">
+                            <p>
+                                このアプリのJavaScriptコード（`getEigenvalue` と `calculateEigenvector` 関数）の中では、市販の汎用ライブラリを使わず、この三対角行列を爆速かつ精度高く解くための特化型アルゴリズムが組まれています。
+                            </p>
+                            <ul>
+                                <li style="margin-bottom: 8px;"><strong>Sturm（スツルム）の符号関数法 ＋ 二分法：</strong><br>
+                                「指定したエネルギー \(E\) 以下の固有値が、この行列の中に何個隠れているか？」を瞬時にカウントする数学の定理（スツルムの数列）を使っています。これを使って、画面右側のリストに表示されている \(n=1 \sim 10\) までのエネルギーの値を、数値誤差に埋もれさせることなくピンポイントに「狙い撃ち」して超高速に仕分けています。</li>
+                                
+                                <li><strong>逆反復法 ＋ トーマス法（実質的な逆行列計算）：</strong><br>
+                                狙ったエネルギー（固有値）が特定されたら、今度はそのエネルギーの波の形（固有ベクトル）だけをギュイーンと引き出すために、行列の連立方程式を逆算して解く「逆反復法」を走らせます。このとき、三対角行列専用のLU分解法である「トーマスアルゴリズム」を使用することで、コンピュータの丸め誤差を極限まで抑え込み、左右対称な壁を描いたときにも波が絶対に左右非対称に歪まない、完璧なグラフィックの抽出を可能にしています。</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// --- 1. 定数とグリッドの設定 ---
+const N = 100; // 空間の分割数
+const L = 5.0;
+const dx = (2 * L) / (N - 1);
+const xVals = Array.from({length: N}, (_, i) => -L + i * dx);
+
+// 物理定数
+const hbar = 1.0;
+const m = 1.0;
+const t = (hbar * hbar) / (2 * m * dx * dx); // 差分項の係数
+
+// ポテンシャルの初期化
+let V = new Array(N).fill(0);
+
+// --- 2. Sturmの定理と逆反復法による高精度固有値解析 ---
+function getEigenvalue(n_val) {
+    let d = new Array(N);
+    let e = new Array(N);
+    for (let i = 0; i < N; i++) {
+        d[i] = 2 * t + V[i];
+        if (i < N - 1) e[i] = -t;
+    }
+
+    let eMin = Math.min(...V) - 1.0; 
+    let eMax = 4 * t + Math.max(...V) + 1.0;
+    
+    function countEigenvalues(E) {
+        let count = 0;
+        let q = d[0] - E;
+        if (q < 0) count++;
+        for (let i = 1; i < N; i++) {
+            if (q === 0) q = Math.abs(e[i-1]) * 1e-14;
+            q = (d[i] - E) - (e[i-1] * e[i-1]) / q;
+            if (q < 0) count++;
+        }
+        return count;
+    }
+
+    for (let iter = 0; iter < 60; iter++) {
+        let mid = (eMin + eMax) / 2;
+        if (countEigenvalues(mid) <= n_val) {
+            eMin = mid;
+        } else {
+            eMax = mid;
+        }
+    }
+    return (eMin + eMax) / 2;
+}
+
+function calculateEigenvector(targetE) {
+    let d = new Array(N);
+    let e = new Array(N);
+    for (let i = 0; i < N; i++) {
+        d[i] = 2 * t + V[i];
+        if (i < N - 1) e[i] = -t;
+    }
+
+    let psi = new Array(N).fill(0).map(() => Math.random() - 0.5);
+    let a_diag = new Array(N);
+    let b_sub = new Array(N-1);
+    let c_super = new Array(N-1);
+    for(let i=0; i<N; i++) a_diag[i] = d[i] - targetE;
+    for(let i=0; i<N-1; i++) { b_sub[i] = e[i]; c_super[i] = e[i]; }
+
+    let cp = new Array(N-1);
+    let dp = new Array(N);
+    dp[0] = a_diag[0];
+    for (let i = 0; i < N - 1; i++) {
+        if(dp[i] === 0) dp[i] = 1e-12;
+        cp[i] = c_super[i] / dp[i];
+        dp[i+1] = a_diag[i+1] - b_sub[i] * cp[i];
+    }
+
+    for (let iter = 0; iter < 3; iter++) {
+        let y = new Array(N);
+        y[0] = psi[0];
+        for (let i = 1; i < N; i++) y[i] = psi[i] - b_sub[i-1] * y[i-1] / dp[i-1];
+        psi[N-1] = y[N-1] / dp[N-1];
+        for (let i = N - 2; i >= 0; i--) psi[i] = (y[i] - c_super[i] * psi[i+1]) / dp[i];
+        
+        let norm = 0;
+        for(let i=0; i<N; i++) norm += psi[i] * psi[i];
+        norm = Math.sqrt(norm);
+        for(let i=0; i<N; i++) psi[i] /= norm;
+    }
+
+    if (psi[Math.floor(N/4)] + psi[Math.floor(3*N/4)] < 0) {
+        for(let i=0; i<N; i++) psi[i] *= -1;
+    }
+    return psi;
+}
+
+// --- 3. グラフの描画設定 (Chart.js) ---
+const ctx = document.getElementById('simChart').getContext('2d');
+let chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        datasets: [
+            { 
+                label: 'ポテンシャル V(x)', 
+                data: xVals.map(x => ({ x: x, y: 0.0 })), 
+                borderColor: '#4caf50', 
+                backgroundColor: '#4caf50',
+                fill: false, 
+                borderDash: [5, 5], 
+                yAxisID: 'yV',
+                borderWidth: 3,
+                pointRadius: 2,
+                pointHoverRadius: 6
+            },
+            { label: '波動関数 ψ(x)', data: [], borderColor: 'blue', fill: false, yAxisID: 'yPsi', pointRadius: 0, borderWidth: 2 },
+            { label: '存在確率 |ψ(x)|²', data: [], borderColor: 'red', backgroundColor: 'rgba(255,0,0,0.1)', fill: true, yAxisID: 'yPsi', pointRadius: 0, borderWidth: 2 },
+            { label: 'エネルギー E', data: [], borderColor: '#ff9800', borderDash: [5, 5], fill: false, pointRadius: 0, borderWidth: 2, yAxisID: 'yV' }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+            title: {
+                display: true,
+                text: '💡 グラフ上をマウスでドラッグして、ポテンシャル V(x) を自由に描画できます',
+                font: { size: 14 },
+                color: '#666'
+            }
+        },
+        scales: {
+            x: { 
+                type: 'linear',
+                position: 'bottom',
+                min: -5.0,
+                max: 5.0,
+                ticks: {
+                    stepSize: 0.5,
+                    callback: function(value) {
+                        return value.toFixed(1);
+                    }
+                },
+                title: { display: true, text: '位置 x' },
+                grid: {
+                    color: function(context) {
+                        if (context.tick && context.tick.value === 0) return '#000000';
+                        return 'rgba(0,0,0,0.08)';
+                    },
+                    lineWidth: function(context) {
+                        if (context.tick && context.tick.value === 0) return 2;
+                        return 1;
+                    }
+                }
+            },
+            yPsi: { type: 'linear', position: 'left', title: { display: true, text: 'ψ / |ψ|²' }, min: -0.5, max: 0.5 },
+            yV: { type: 'linear', position: 'right', title: { display: true, text: 'ポテンシャルエネルギー V' }, min: -10, max: 10 }
+        }
+    }
+});
+
+// グローバル変数で現在の選択されている量子数（0-indexed）を保持
+let currentQuantumN = 0;
+
+// --- 4. 画面更新ロジック ---
+function updateSimulation() {
+    let n = currentQuantumN;
+    
+    // n=1 から n=10 までの固有値をすべて計算する
+    let energies = [];
+    const limit = Math.min(10, N);
+    for (let i = 0; i < limit; i++) {
+        energies.push(getEigenvalue(i));
+    }
+    
+    const targetE = energies[n];
+    
+    // 逆反復法で固有ベクトルを取得
+    let psi_raw = calculateEigenvector(targetE);
+    
+    let psi = [];
+    let psiSq = [];
+    
+    // 物理的な規格化 (∫|ψ|^2 dx = 1) を行う
+    let norm = 0;
+    for(let i=0; i<N; i++) {
+        norm += psi_raw[i] * psi_raw[i] * dx;
+    }
+    norm = Math.sqrt(norm);
+
+    for(let i=0; i<N; i++) {
+        let val = psi_raw[i] / norm;
+        psi.push(val * 0.3); // 描画サイズ調整用にスケール
+        psiSq.push(val * val * 0.3);
+    }
+
+    // linearスケール用に {x, y} 形式にデータをマッピング
+    const vData = xVals.map((x, i) => ({ x: x, y: V[i] }));
+    const psiData = xVals.map((x, i) => ({ x: x, y: psi[i] }));
+    const psiSqData = xVals.map((x, i) => ({ x: x, y: psiSq[i] }));
+    const energyData = xVals.map((x, i) => ({ x: x, y: targetE }));
+
+    // グラフデータの更新
+    chart.data.datasets[0].data = vData;
+    chart.data.datasets[1].data = psiData;
+    chart.data.datasets[2].data = psiSqData;
+    chart.data.datasets[3].data = energyData;
+    chart.update('none'); // 'none' でアニメーションをスキップして高速化
+
+    // 一覧リストの更新
+    updateEnergyList(energies, n);
+}
+
+function updateEnergyList(energies, currentN) {
+    const listContainer = document.getElementById('energyList');
+    listContainer.innerHTML = '';
+    
+    for (let i = 0; i < energies.length; i++) {
+        const energy = energies[i];
+        
+        const item = document.createElement('div');
+        item.className = 'energy-item' + (i === currentN ? ' active' : '');
+        item.innerHTML = `
+            <span class="n-val">n = ${i + 1}</span>
+            <span class="e-val">E = ${energy.toFixed(4)}</span>
+        `;
+        item.onclick = () => {
+            currentQuantumN = i;
+            updateSimulation();
+        };
+        listContainer.appendChild(item);
+    }
+}
+
+// --- 5. UI操作用関数 & プリセット設定 ---
+function applyPreset(type) {
+    V.fill(0.0);
+    currentQuantumN = 0; // プリセット変更時は基本状態 n=1 にリセット
+
+    switch (type) {
+        case 'well': // 有限深さの井戸 (-1.0 〜 1.0 の位置に深さ -5.0)
+            for(let i=0; i<N; i++) {
+                V[i] = (i >= 40 && i <= 59) ? -5.0 : 0.0;
+            }
+            break;
+        case 'atom': // 原子核の再現 (水素原子風ソフトコアクーロンポテンシャル)
+            for(let i=0; i<N; i++) {
+                let x = xVals[i];
+                V[i] = -8.0 / Math.sqrt(x*x + 0.64);
+            }
+            break;
+        case 'center-wall': // 中央に壁
+            for(let i=0; i<N; i++) {
+                V[i] = (i >= 48 && i <= 51) ? 5.0 : 0.0;
+            }
+            break;
+        case 'right-wall': // 右にずれた壁
+            for(let i=0; i<N; i++) {
+                V[i] = (i >= 49 && i <= 52) ? 5.0 : 0.0;
+            }
+            break;
+        case 'flat': // 平坦
+        default:
+            V.fill(0.0);
+            break;
+    }
+
+    // アクティブなボタンのハイライト切り替え
+    const buttons = ['flat', 'well', 'atom', 'center-wall', 'right-wall'];
+    buttons.forEach(btnType => {
+        const btn = document.getElementById('btn-' + btnType);
+        if (btn) {
+            if (btnType === type) btn.classList.add('active');
+            else btn.classList.remove('active');
+        }
+    });
+    document.getElementById('customLabel').style.display = 'none';
+
+    updateSimulation();
+}
+
+function addBarrier() {
+    V.fill(0);
+    for(let i = 48; i <= 51; i++) V[i] = 5;
+    
+    // プリセットボタンのアクティブを解除してカスタム表示
+    clearActivePresetButtons();
+    document.getElementById('customLabel').style.display = 'inline';
+    updateSimulation();
+}
+
+function clearPotential() {
+    applyPreset('flat');
+}
+
+function clearActivePresetButtons() {
+    const buttons = ['flat', 'well', 'atom', 'center-wall', 'right-wall'];
+    buttons.forEach(btnType => {
+        const btn = document.getElementById('btn-' + btnType);
+        if (btn) btn.classList.remove('active');
+    });
+}
+
+// --- 6. ドラッグによるポテンシャル描画機能 ---
+let isDragging = false;
+let lastIndex = -1;
+
+function handleDragEvent(e) {
+    if (!isDragging) return;
+    if (e.cancelable) e.preventDefault(); // スマホでのスクロールを防止
+
+    // Canvas上の座標を取得
+    const rect = chart.canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const xPixel = clientX - rect.left;
+    const yPixel = clientY - rect.top;
+
+    // ピクセル座標をChart.jsのスケール値に逆変換
+    const xVal = chart.scales.x.getValueForPixel(xPixel);
+    const yVal = chart.scales.yV.getValueForPixel(yPixel);
+
+    if (xVal === undefined || yVal === undefined) return;
+
+    // xValは-5.0から5.0のスケール値。インデックス(0〜99)にマッピングする。
+    // x = -L + i * dx  =>  i = (x + L) / dx
+    const i = Math.round((xVal + L) / dx);
+
+    if (i >= 0 && i < N) {
+        // Y値をポテンシャルの範囲（-10 〜 10）に制限
+        let clampedY = Math.max(-10, Math.min(10, yVal));
+
+        if (lastIndex !== -1 && Math.abs(i - lastIndex) > 1) {
+            // マウスが速く動いた場合の隙間を線形補間して埋める
+            let step = Math.sign(i - lastIndex);
+            let yDiff = (clampedY - V[lastIndex]) / Math.abs(i - lastIndex);
+            for (let j = 1; j <= Math.abs(i - lastIndex); j++) {
+                V[lastIndex + j * step] = V[lastIndex] + yDiff * j;
+            }
+        } else {
+            V[i] = clampedY;
+        }
+
+        lastIndex = i;
+        clearActivePresetButtons();
+        document.getElementById('customLabel').style.display = 'inline';
+        updateSimulation(); // ドラッグ中に即座に再計算・描画
+    }
+}
+
+// マウスイベント
+chart.canvas.addEventListener('mousedown', (e) => { isDragging = true; lastIndex = -1; handleDragEvent(e); });
+chart.canvas.addEventListener('mousemove', handleDragEvent);
+chart.canvas.addEventListener('mouseup', () => { isDragging = false; lastIndex = -1; });
+chart.canvas.addEventListener('mouseleave', () => { isDragging = false; lastIndex = -1; });
+
+// タッチイベント（スマートフォン対応）
+chart.canvas.addEventListener('touchstart', (e) => { isDragging = true; lastIndex = -1; handleDragEvent(e); }, { passive: false });
+chart.canvas.addEventListener('touchmove', handleDragEvent, { passive: false });
+chart.canvas.addEventListener('touchend', () => { isDragging = false; lastIndex = -1; });
+
+// アコーディオンのトグルロジック
+document.querySelectorAll('.accordion-header').forEach(header => {
+    header.addEventListener('click', () => {
+        const accordion = header.parentElement;
+        const content = header.nextElementSibling;
+        const isOpen = accordion.classList.contains('open');
+        
+        if (isOpen) {
+            // 閉じる処理
+            content.style.maxHeight = content.scrollHeight + 'px';
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    accordion.classList.remove('open');
+                    content.style.maxHeight = '0px';
+                });
+            });
+        } else {
+            // 開く処理
+            accordion.classList.add('open');
+            content.style.maxHeight = content.scrollHeight + 'px';
             
-            <div className="controls">
-              <div className="control-group">
-                <label>
-                  <span>Excitation Frequency ($f$)</span>
-                  <span className="value-display">{frequency.toFixed(2)} Hz</span>
-                </label>
-                <input 
-                  type="range" 
-                  min="0.1" 
-                  max="3.0" 
-                  step="0.05" 
-                  value={frequency} 
-                  onChange={(e) => setFrequency(parseFloat(e.target.value))} 
-                />
-                <div className="info">Natural Frequency ($f_n$): 1.00 Hz</div>
-              </div>
+            const onTransitionEnd = (e) => {
+                if (e.propertyName === 'max-height' && accordion.classList.contains('open')) {
+                    content.style.maxHeight = 'none';
+                    content.removeEventListener('transitionend', onTransitionEnd);
+                }
+            };
+            content.addEventListener('transitionend', onTransitionEnd);
+        }
+    });
+});
 
-              <div className="control-group">
-                <label>
-                  <span>Input Amplitude ($A$)</span>
-                  <span className="value-display">{amplitude.toFixed(0)} px</span>
-                </label>
-                <input 
-                  type="range" 
-                  min="10" 
-                  max="80" 
-                  step="1" 
-                  value={amplitude} 
-                  onChange={(e) => setAmplitude(parseFloat(e.target.value))} 
-                />
-              </div>
-            </div>
-          </div>
-        </React.Fragment>
-      );
-    };
+// 初期状態のオープン設定 (大章1 と 節 1-1 を開いておく)
+window.addEventListener('DOMContentLoaded', () => {
+    // 大章1を開く
+    const parent1 = document.getElementById('parent-1');
+    if (parent1) {
+        parent1.classList.add('open');
+        const p1Content = parent1.querySelector('.accordion-content');
+        p1Content.style.maxHeight = 'none'; // 初期状態はnoneにしてスクロール可能にする
+    }
+    
+    // 節1-1を開く
+    const child11 = document.getElementById('child-1-1');
+    if (child11) {
+        child11.classList.add('open');
+        const c11Content = child11.querySelector('.accordion-content');
+        c11Content.style.maxHeight = 'none';
+    }
+});
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
-  </script>
+// 初期実行 (平坦ポテンシャルをデフォルト適用)
+applyPreset('flat');
+</script>
+
 </body>
 </html>
