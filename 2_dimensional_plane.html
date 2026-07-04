@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>2次元シュレディンガー方程式シミュレーター</title>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background: #f5f5f5; color: #333; }
+        .container { max-width: 900px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px #0002; }
+        .controls { margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+        .control-group { border: 1px solid #ddd; padding: 10px; border-radius: 5px; display: flex; gap: 10px; align-items: center; background: #fafafa; }
+        canvas { background: #000; border: 1px solid #333; cursor: crosshair; display: block; margin: 0 auto; }
+        .canvas-container { position: relative; width: 100%; display: flex; justify-content: center; }
+        
+        button { padding: 6px 12px; cursor: pointer; border: 1px solid #ccc; background: #fff; border-radius: 4px; }
+        button:hover { background: #eee; }
+        button.active { background: #4caf50; color: white; border-color: #4caf50; }
+        
+        .explanation { margin-top: 40px; border-top: 1px solid #ccc; padding-top: 20px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>2次元シュレディンガー方程式ソルバー</h2>
+    
+    <div class="controls">
+        <div class="control-group">
+            <label>量子状態 $n$: 
+                <input type="number" id="quantumN" value="1" min="1" max="6" style="width: 50px;">
+            </label>
+        </div>
+        <div class="control-group">
+            <strong>描画モード:</strong>
+            <button id="modeDraw" class="active" onclick="setMode('draw')">壁を描く</button>
+            <button id="modeErase" onclick="setMode('erase')">壁を消す</button>
+        </div>
+        <div class="control-group">
+            <strong>プリセット:</strong>
+            <button onclick="presetClear()">クリア</button>
+            <button onclick="presetDoubleSlit()">二重スリット</button>
+            <button onclick="presetCircle()">中央障壁</button>
+            <button onclick="presetHydrogen()">水素原子（2D）</button>
+        </div>
+    </div>
+
+    <div class="canvas-container">
+        <!-- 500x500: 50x50グリッドなので1マス10px -->
+        <canvas id="simCanvas" width="500" height="500"></canvas>
+    </div>
+
+    <div class="explanation">
+        <h3>物理・アルゴリズム解説（2次元版）</h3>
+        <p>
+            このアプリは、2次元平面上のシュレディンガー方程式 \( \left( -\frac{\hbar^2}{2m} \nabla^2 + V(x,y) \right) \psi = E \psi \) をリアルタイムに解き、電子などの存在確率密度 \( |\psi(x,y)|^2 \) をヒートマップで可視化します（青=低、赤/白=高）。
+        </p>
+        <h4>高速な虚時間発展法 (Imaginary Time Evolution)</h4>
+        <p>
+            2次元になると計算点が 50×50 = 2500 点となり、ハミルトニアン行列は 2500×2500 の巨大サイズになります。そのため、1次元版の対角化アルゴリズムではなく、物理シミュレーションで強力な<strong>虚時間発展法</strong>を採用しています。<br>
+            時間 \( t \) を虚数 \( -i\tau \) に置き換えてシュレディンガー方程式を発展させると、高いエネルギー状態が急速に減衰し、自動的に最もエネルギーの低い基底状態（または直交化によって特定の励起状態）に超高速で収束します。ユーザーがポテンシャルをドラッグで書き換えても、前回の状態から数ステップ発展させるだけで即座に新しい状態に追従します。
+        </p>
+    </div>
+    
+    <div style="margin-top: 30px; margin-bottom: 20px; text-align: center;">
+        <a href="index.html" style="display: inline-block; padding: 12px 24px; background-color: #1976d2; color: white; font-weight: bold; text-decoration: none; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); font-size: 1.1rem;">⬅️ メインページ（時間に依存しない方程式）に戻る</a>
+    </div>
+</div>
+
+<script>
+// --- 1. グリッドと定数の設定 ---
+const N_grid = 50;
+const N_total = N_grid * N_grid;
+const L = 5.0;
+const dx = (2 * L) / (N_grid - 1);
+
+const hbar = 1.0;
+const m = 1.0;
+const t_coeff = (hbar * hbar) / (2 * m * dx * dx); // ラプラシアンの係数
+
+const dtau = 0.01; // 虚時間ステップ
+const MAX_N = 6; // 計算できる最大状態数
+
+// --- 2. 物理状態配列 ---
+let V = new Float64Array(N_total); // ポテンシャルエネルギー
+let psis = []; // 各量子状態の波動関数
+for (let n = 0; n < MAX_N; n++) {
+    let psi = new Float64Array(N_total);
+    for (let i = 0; i < N_total; i++) {
+        psi[i] = Math.random() - 0.5;
+    }
+    psis.push(psi);
+}
+// 初期状態の正規直交化
+orthogonalizeAll();
+
+// --- 3. 虚時間発展アルゴリズム ---
+function evolveStates(target_n, steps) {
+    let psi_new = new Float64Array(N_total);
+    
+    for (let step = 0; step < steps; step++) {
+        for (let k = 0; k <= target_n; k++) {
+            let psi_k = psis[k];
+            
+            // H|psi> の計算と発展
+            for (let i = 0; i < N_grid; i++) {
+                for (let j = 0; j < N_grid; j++) {
+                    let idx = i * N_grid + j;
+                    
+                    // 2次元ラプラシアン (5点差分)
+                    let laplacian = -4 * psi_k[idx];
+                    if (i > 0) laplacian += psi_k[idx - N_grid];
+                    if (i < N_grid - 1) laplacian += psi_k[idx + N_grid];
+                    if (j > 0) laplacian += psi_k[idx - 1];
+                    if (j < N_grid - 1) laplacian += psi_k[idx + 1];
+                    
+                    let H_psi = -t_coeff * laplacian + V[idx] * psi_k[idx];
+                    
+                    // 虚時間発展: |psi> = |psi> - dtau * H|psi>
+                    psi_new[idx] = psi_k[idx] - dtau * H_psi;
+                }
+            }
+            
+            // グラム・シュミットの直交化（自分より下の状態と直交させる）
+            for (let m = 0; m < k; m++) {
+                let dot = 0;
+                for (let idx = 0; idx < N_total; idx++) {
+                    dot += psi_new[idx] * psis[m][idx];
+                }
+                for (let idx = 0; idx < N_total; idx++) {
+                    psi_new[idx] -= dot * psis[m][idx];
+                }
+            }
+            
+            // 規格化
+            let norm = 0;
+            for (let idx = 0; idx < N_total; idx++) {
+                norm += psi_new[idx] * psi_new[idx];
+            }
+            norm = Math.sqrt(norm);
+            if (norm > 0) {
+                for (let idx = 0; idx < N_total; idx++) {
+                    psis[k][idx] = psi_new[idx] / norm;
+                }
+            }
+        }
+    }
+}
+
+function orthogonalizeAll() {
+    for (let k = 0; k < MAX_N; k++) {
+        let psi_k = psis[k];
+        for (let m = 0; m < k; m++) {
+            let dot = 0;
+            for (let idx = 0; idx < N_total; idx++) {
+                dot += psi_k[idx] * psis[m][idx];
+            }
+            for (let idx = 0; idx < N_total; idx++) {
+                psi_k[idx] -= dot * psis[m][idx];
+            }
+        }
+        let norm = 0;
+        for (let idx = 0; idx < N_total; idx++) {
+            norm += psi_k[idx] * psi_k[idx];
+        }
+        norm = Math.sqrt(norm);
+        if (norm > 0) {
+            for (let idx = 0; idx < N_total; idx++) {
+                psi_k[idx] /= norm;
+            }
+        }
+    }
+}
+
+// --- 4. 描画ロジック (Canvas) ---
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+const cellW = canvas.width / N_grid;
+const cellH = canvas.height / N_grid;
+
+function getColor(prob, maxProb) {
+    // 存在確率を青→紫→赤→白のヒートマップに変換
+    let ratio = Math.min(1.0, prob / maxProb);
+    let r, g, b;
+    if (ratio < 0.33) {
+        let t = ratio / 0.33;
+        r = 0; g = 0; b = Math.floor(255 * t);
+    } else if (ratio < 0.66) {
+        let t = (ratio - 0.33) / 0.33;
+        r = Math.floor(255 * t); g = 0; b = Math.floor(255 * (1 - t));
+    } else {
+        let t = (ratio - 0.66) / 0.34;
+        r = 255; g = Math.floor(255 * t); b = Math.floor(255 * t);
+    }
+    return `rgb(${r},${g},${b})`;
+}
+
+function render() {
+    let n = parseInt(document.getElementById('quantumN').value) - 1;
+    if (isNaN(n) || n < 0) n = 0;
+    if (n >= MAX_N) n = MAX_N - 1;
+
+    let target_psi = psis[n];
+    
+    // 最大確率を求めて色のスケールを決定
+    let maxProb = 0;
+    for (let i = 0; i < N_total; i++) {
+        let prob = target_psi[i] * target_psi[i];
+        if (prob > maxProb) maxProb = prob;
+    }
+    // スケールの安定化
+    if (maxProb < 0.001) maxProb = 0.001;
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (let i = 0; i < N_grid; i++) {
+        for (let j = 0; j < N_grid; j++) {
+            let idx = i * N_grid + j;
+            
+            // 確率密度の描画
+            let prob = target_psi[idx] * target_psi[idx];
+            ctx.fillStyle = getColor(prob, maxProb * 0.8); // 少し明るめに表示
+            ctx.fillRect(j * cellW, i * cellH, cellW + 1, cellH + 1); // 隙間防止のため+1
+
+            // ポテンシャル（壁）のオーバーレイ描画
+            if (V[idx] > 0) {
+                // 壁はグレーブロックとして描画
+                let alpha = Math.min(0.8, V[idx] / 10.0);
+                ctx.fillStyle = `rgba(100, 100, 100, ${alpha})`;
+                ctx.fillRect(j * cellW, i * cellH, cellW + 1, cellH + 1);
+            } else if (V[idx] < 0) {
+                // 水素原子などの引力ポテンシャル（井戸）は黄色っぽくオーバーレイ
+                let alpha = Math.min(0.5, -V[idx] / 20.0);
+                ctx.fillStyle = `rgba(255, 255, 0, ${alpha})`;
+                ctx.fillRect(j * cellW, i * cellH, cellW + 1, cellH + 1);
+            }
+        }
+    }
+}
+
+// --- 5. メインループ ---
+let isUpdating = false;
+function loop() {
+    let n = parseInt(document.getElementById('quantumN').value) - 1;
+    if (isNaN(n) || n < 0) n = 0;
+    if (n >= MAX_N) n = MAX_N - 1;
+    
+    // 常に少しずつ虚時間発展させて状態を安定・追従させる
+    evolveStates(n, 5); 
+    render();
+    requestAnimationFrame(loop);
+}
+
+// --- 6. ユーザー操作・UI制御 ---
+let currentMode = 'draw';
+let isDragging = false;
+
+function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('modeDraw').className = mode === 'draw' ? 'active' : '';
+    document.getElementById('modeErase').className = mode === 'erase' ? 'active' : '';
+}
+
+function handleDrag(e) {
+    if (!isDragging) return;
+    if (e.cancelable) e.preventDefault();
+
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    // Canvas内のピクセルからグリッドのインデックスへ変換
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+    const j = Math.floor(px / cellW);
+    const i = Math.floor(py / cellH);
+
+    if (i >= 0 && i < N_grid && j >= 0 && j < N_grid) {
+        // 筆の太さ（3x3グリッド）
+        for(let di = -1; di <= 1; di++) {
+            for(let dj = -1; dj <= 1; dj++) {
+                let ni = i + di;
+                let nj = j + dj;
+                if (ni >= 0 && ni < N_grid && nj >= 0 && nj < N_grid) {
+                    let idx = ni * N_grid + nj;
+                    if (currentMode === 'draw') {
+                        V[idx] = 20.0; // 高い壁
+                    } else {
+                        V[idx] = 0.0;  // 消去
+                    }
+                }
+            }
+        }
+        // 操作時は速やかに新しい状態へ収束させるため多めに発展
+        let n = parseInt(document.getElementById('quantumN').value) - 1;
+        evolveStates(Math.max(0, Math.min(n, MAX_N-1)), 15);
+    }
+}
+
+canvas.addEventListener('mousedown', (e) => { isDragging = true; handleDrag(e); });
+canvas.addEventListener('mousemove', handleDrag);
+canvas.addEventListener('mouseup', () => { isDragging = false; });
+canvas.addEventListener('mouseleave', () => { isDragging = false; });
+
+canvas.addEventListener('touchstart', (e) => { isDragging = true; handleDrag(e); }, { passive: false });
+canvas.addEventListener('touchmove', handleDrag, { passive: false });
+canvas.addEventListener('touchend', () => { isDragging = false; });
+
+document.getElementById('quantumN').addEventListener('change', () => {
+    // 状態が変更されたらしっかり収束させる
+    let n = parseInt(document.getElementById('quantumN').value) - 1;
+    evolveStates(Math.max(0, Math.min(n, MAX_N-1)), 100);
+});
+
+// --- 7. プリセット関数 ---
+function applyPresetAndConverge() {
+    // ポテンシャルが大きく変わった場合は、ノイズから完全に再収束させる
+    for (let k = 0; k < MAX_N; k++) {
+        for (let i = 0; i < N_total; i++) {
+            psis[k][i] = Math.random() - 0.5;
+        }
+    }
+    orthogonalizeAll();
+    let n = parseInt(document.getElementById('quantumN').value) - 1;
+    evolveStates(Math.max(0, Math.min(n, MAX_N-1)), 200);
+}
+
+function presetClear() {
+    V.fill(0);
+    applyPresetAndConverge();
+}
+
+function presetDoubleSlit() {
+    V.fill(0);
+    // 中央の少し上に横一文字の壁、そこに2つの隙間
+    let i_wall = Math.floor(N_grid / 2);
+    for (let j = 0; j < N_grid; j++) {
+        // スリット幅
+        if ((j < 10 || j > 13) && (j < 17 || j > 20)) {
+            V[i_wall * N_grid + j] = 20.0;
+            V[(i_wall+1) * N_grid + j] = 20.0; // 壁に厚みを持たせる
+        }
+    }
+    applyPresetAndConverge();
+}
+
+function presetCircle() {
+    V.fill(0);
+    let ci = N_grid / 2;
+    let cj = N_grid / 2;
+    let r = 5;
+    for (let i = 0; i < N_grid; i++) {
+        for (let j = 0; j < N_grid; j++) {
+            if (Math.pow(i - ci, 2) + Math.pow(j - cj, 2) < r * r) {
+                V[i * N_grid + j] = 20.0;
+            }
+        }
+    }
+    applyPresetAndConverge();
+}
+
+function presetHydrogen() {
+    V.fill(0);
+    let ci = N_grid / 2;
+    let cj = N_grid / 2;
+    for (let i = 0; i < N_grid; i++) {
+        for (let j = 0; j < N_grid; j++) {
+            let idx = i * N_grid + j;
+            // 中心の距離
+            let dx = (j - cj);
+            let dy = (i - ci);
+            let r = Math.sqrt(dx * dx + dy * dy);
+            // クーロン引力ポテンシャル（発散を防ぐためルート内にオフセット）
+            V[idx] = -20.0 / Math.sqrt(r * r + 1.0);
+        }
+    }
+    applyPresetAndConverge();
+}
+
+// 起動開始
+presetClear();
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>
