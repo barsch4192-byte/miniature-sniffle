@@ -130,12 +130,20 @@
 <div class="container">
     <h2>1次元シュレディンガー方程式シミュレーター</h2>
     <div class="controls" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-        <span style="font-weight: bold; margin-right: 5px;">プリセットポテンシャル:</span>
+        <span style="font-weight: bold; margin-right: 5px;">プリセット:</span>
         <button id="btn-flat" onclick="applyPreset('flat')">平坦</button>
         <button id="btn-well" onclick="applyPreset('well')">有限深さの井戸</button>
-        <button id="btn-atom" onclick="applyPreset('atom')">水素原子内の電子</button>
+        <button id="btn-atom" onclick="applyPreset('atom')">クーロンポテンシャル</button>
+        <button id="btn-harmonic" onclick="applyPreset('harmonic')">調和振動子</button>
         <button id="btn-center-wall" onclick="applyPreset('center-wall')">中央に壁</button>
         <button id="btn-right-wall" onclick="applyPreset('right-wall')">右に少しずれた壁</button>
+        
+        <div style="margin-left: 10px; display: flex; align-items: center; gap: 5px; background: #e3f2fd; padding: 4px 10px; border-radius: 4px; border: 1px solid #90caf9;">
+            <label for="depthSlider" style="font-size: 0.85rem; font-weight: bold; color: #1565c0;">深さ/強さ:</label>
+            <input type="range" id="depthSlider" min="0.1" max="3" step="0.1" value="1.0" oninput="onDepthChange(this.value)" style="width: 80px;">
+            <span id="depthValLabel" style="font-size: 0.85rem; font-family: monospace; color: #1565c0; width: 30px;">1.0x</span>
+        </div>
+        
         <span id="customLabel" style="font-size: 0.9rem; color: #888; margin-left: 10px; display: none;">(カスタム描画中)</span>
     </div>
     <div class="main-layout">
@@ -469,10 +477,10 @@
                         </div>
                     </div>
 
-                    <!-- 1-3 孫アコーディオン③：原子核の再現 -->
+                    <!-- 1-3 孫アコーディオン③：クーロンポテンシャルの再現 -->
                     <div class="tips-accordion" style="margin-left: 14px; margin-top: 10px;">
                         <div class="tips-header accordion-header" style="color: #0d47a1;">
-                            <span>⚛️ 原子核の再現（クーロン引力とs軌道・球面調和関数）</span>
+                            <span>⚛️ クーロンポテンシャル（水素原子モデルとs軌道）</span>
                             <span class="arrow-icon">▶</span>
                         </div>
                         <div class="accordion-content">
@@ -487,9 +495,13 @@
                                             $$ V(x) = -\frac{Z}{\sqrt{x^2 + \alpha^2}} \quad (Z=8.0, \, \alpha=0.8) $$
                                             この引力ポテンシャルを解くことで得られる最低エネルギー（\(n=1\)）の基底状態の確率分布は、3次元水素原子の最も基本的で球面対称な波動関数である<b>「\(s\)軌道」</b>に対応しています。
                                         </p>
-                                        <p>
-                                            このようなポテンシャル場で、電子が原子核に落ちずにいるのは、電子が「波」として広がっているからなんですね～
-                                        </p>
+                                        <div style="background: #e3f2fd; border-left: 4px solid #1976d2; padding: 10px 15px; margin-top: 15px; border-radius: 4px;">
+                                            <strong style="color: #0d47a1; font-size: 0.95rem;">💡 なぜ電子は原子核に落ちないの？</strong>
+                                            <p style="margin-top: 6px; margin-bottom: 0; font-size: 0.9rem; line-height: 1.5;">
+                                                古典力学の常識では、プラスとマイナスは引き合うため、電子はいずれ原子核に衝突してしまうはずです。しかし量子力学では、電子が「波」として空間に広がっていることに加え、<strong>「エネルギー固有値が飛び飛び（離散的）になる」</strong>という極めて重要な性質があります。<br>
+                                                シミュレーターのリストにある通り、一番低いエネルギー状態（\(n=1\) の基底状態）よりも下（マイナス無限大方向）のエネルギー準位は存在しません。そのため、電子はこれ以上エネルギーを失って原子核の底に落ち込むことができないのです。この「エネルギーの離散化」こそが、原子が潰れず、私たちを含めた物質が安定して存在できる究極の理由です。
+                                            </p>
+                                        </div>
                                     </div>
                                     
                                     <div style="flex: 0 0 auto; margin: 0 auto; background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: 15px;">
@@ -865,6 +877,15 @@
     <p style="margin-top: 8px;">
         ✉️ 物理に関する疑問・質問がありましたら、<a href="https://docs.google.com/forms/d/e/1FAIpQLSd7G0rqesV_lpegN6gsr_F-GNFQuRfZsWKo0swu863QXfCI7w/viewform" target="_blank" style="color: #1565c0; text-decoration: none; font-weight: bold;">こちらのGoogleフォーム</a>からいつでも質問を受け付けています！
     </p>
+    
+    <!-- アクセスカウンター -->
+    <div style="margin-top: 25px; text-align: center;">
+        <a href="https://hits.seeyoufarm.com" target="_blank" rel="noopener noreferrer">
+            <img src="https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fsota-drive.schrodinger.simulator&count_bg=%231976D2&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=Total+Visits&edge_flat=false" alt="Hits" style="height: 20px; border-radius: 4px;"/>
+        </a>
+        <div style="font-size: 0.8rem; color: #888; margin-top: 4px;"></div>
+    </div>
+
     <div style="margin-top: 20px; background: #fffde7; border: 1px dashed #fbc02d; padding: 12px; border-radius: 6px; font-size: 0.9rem; text-align: left; max-width: 800px; margin-left: auto; margin-right: auto;">
         <strong style="color: #f57f17; font-size: 0.95rem;">💡 このサイトの内容についてAI（GeminiやChatGPT等）に聞く方法</strong>
         <p style="margin-top: 6px; margin-bottom: 0; line-height: 1.5;">
@@ -1110,30 +1131,55 @@ function updateEnergyList(energies, currentN) {
 }
 
 // --- 5. UI操作用関数 & プリセット設定 ---
-function applyPreset(type) {
+let currentPresetType = 'flat';
+let presetScale = 1.0;
+
+function onDepthChange(val) {
+    presetScale = parseFloat(val);
+    document.getElementById('depthValLabel').innerText = presetScale.toFixed(1) + 'x';
+    // カスタム描画中でなければ、現在のプリセットを再適用してスケール反映
+    if (document.getElementById('customLabel').style.display === 'none') {
+        let savedN = currentQuantumN; // 量子数を保持
+        applyPreset(currentPresetType, true);
+        currentQuantumN = savedN;
+        updateSimulation();
+    } else {
+        // カスタム描画中の場合、現在描かれているV全体をスケールさせる（簡易実装）
+        // ※今回はプリセット再適用の動作を基本とします
+    }
+}
+
+function applyPreset(type, keepN = false) {
     V.fill(0.0);
-    currentQuantumN = 0; // プリセット変更時は基本状態 n=1 にリセット
+    currentPresetType = type;
+    if (!keepN) currentQuantumN = 0; // プリセット変更時は基本状態 n=1 にリセット
 
     switch (type) {
         case 'well': // 有限深さの井戸 (-1.0 〜 1.0 の位置に深さ -5.0)
             for(let i=0; i<N; i++) {
-                V[i] = (i >= 40 && i <= 59) ? -5.0 : 0.0;
+                V[i] = (i >= 40 && i <= 59) ? -5.0 * presetScale : 0.0;
             }
             break;
-        case 'atom': // 原子核の再現 (水素原子風ソフトコアクーロンポテンシャル)
+        case 'atom': // 原子核の再現 (1次元クーロンポテンシャル近似)
             for(let i=0; i<N; i++) {
                 let x = xVals[i];
-                V[i] = -8.0 / Math.sqrt(x*x + 0.64);
+                V[i] = (-8.0 / Math.sqrt(x*x + 0.64)) * presetScale;
+            }
+            break;
+        case 'harmonic': // 調和振動子
+            for(let i=0; i<N; i++) {
+                let x = xVals[i];
+                V[i] = (2.0 * x * x) * presetScale;
             }
             break;
         case 'center-wall': // 中央に壁
             for(let i=0; i<N; i++) {
-                V[i] = (i >= 48 && i <= 51) ? 5.0 : 0.0;
+                V[i] = (i >= 48 && i <= 51) ? 5.0 * presetScale : 0.0;
             }
             break;
         case 'right-wall': // 右にずれた壁
             for(let i=0; i<N; i++) {
-                V[i] = (i >= 49 && i <= 52) ? 5.0 : 0.0;
+                V[i] = (i >= 49 && i <= 52) ? 5.0 * presetScale : 0.0;
             }
             break;
         case 'flat': // 平坦
@@ -1143,7 +1189,7 @@ function applyPreset(type) {
     }
 
     // アクティブなボタンのハイライト切り替え
-    const buttons = ['flat', 'well', 'atom', 'center-wall', 'right-wall'];
+    const buttons = ['flat', 'well', 'atom', 'harmonic', 'center-wall', 'right-wall'];
     buttons.forEach(btnType => {
         const btn = document.getElementById('btn-' + btnType);
         if (btn) {
